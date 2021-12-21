@@ -2467,7 +2467,7 @@ class GetSchedule(Resource):
 
             query = (
                 """SELECT view_unique_id
-                            , schedule
+                            , (schedule)
                             , color
                         FROM skedul.views
                         WHERE user_id = \'"""
@@ -2568,7 +2568,7 @@ class GetSchedule(Resource):
                 print(item)
 
             response["message"] = "successful"
-            response["result"] = item
+            response["result"] = items
 
             return response, 200
         except:
