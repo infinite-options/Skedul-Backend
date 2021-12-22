@@ -2568,7 +2568,7 @@ class GetSchedule(Resource):
                 print(item)
 
             response["message"] = "successful"
-            response["result"] = items
+            response["result"] = item
 
             return response, 200
         except:
