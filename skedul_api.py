@@ -718,6 +718,7 @@ class UserToken(Resource):
             items = execute(query, "get", conn)
             print(items)
             response["message"] = "successful"
+            response["user_unique_id"] = items["result"][0]["user_unique_id"]
             response["user_email_id"] = items["result"][0]["user_email_id"]
             response["google_auth_token"] = items["result"][0]["google_auth_token"]
             response["google_refresh_token"] = items["result"][0][
@@ -734,7 +735,7 @@ class UserToken(Resource):
 # updating access token if expired
 class UpdateAccessToken(Resource):
     def post(self, user_unique_id):
-        print("In usertoken")
+        print("In UpdateAccessToken")
         response = {}
         items = {}
 
@@ -1067,16 +1068,17 @@ class UserSocialLogin(Resource):
             conn = connect()
             temp = False
             emails = execute(
-                """SELECT user_unique_id, user_email_id from users;""", "get", conn
+                """SELECT user_unique_id, user_email_id, google_auth_token from users;""", "get", conn
             )
             for i in range(len(emails["result"])):
                 email = emails["result"][i]["user_email_id"]
                 if email == email_id:
                     temp = True
                     user_unique_id = emails["result"][i]["user_unique_id"]
+                    google_auth_token = emails["result"][i]["google_auth_token"]
             if temp == True:
 
-                response["result"] = user_unique_id
+                response["result"] = user_unique_id, google_auth_token
                 response["message"] = "Correct Email"
 
             if temp == False:
@@ -1131,9 +1133,13 @@ class AddEvent(Resource):
             view_id = data["view_id"]
             print("View ID")
             user_id = data["user_id"]
+            print(user_id)
             event_name = data["event_name"]
+            print(event_name)
             location = data["location"]
+            print(location)
             duration = data["duration"]
+            print(duration)
             buffer_time = data["buffer_time"]
             print(buffer_time)
             # buffer_time = json.loads(buffer_time)
@@ -1149,6 +1155,22 @@ class AddEvent(Resource):
             }
 
             print("Data Received")
+            if(duration!= ''):
+                print(duration[2:4])
+                if(duration[2:4] == "30"):
+                    duration= duration.replace("00", "59")
+                    duration= duration.replace("30", "29")
+                else:
+                    duration= duration.replace("00", "59")
+                    print(duration)
+                    x = int (duration[0])
+                    x-=1
+                    position =0
+                    duration = duration[:position] + str(x)+ duration[position+1:]
+                    print(duration)
+                
+                    
+                    
 
             query = ["CALL skedul.get_event_id;"]
             print(query)
@@ -1530,7 +1552,7 @@ class GetView(Resource):
             raise BadRequest("Request failed, please try again later.")
         finally:
             disconnect(conn)
-
+# -- SCHEDULE PAGE -----------
 
 class GetSchedule(Resource):
     def get(self, user_id):
@@ -1652,6 +1674,100 @@ class GetSchedule(Resource):
         finally:
             disconnect(conn)
 
+class AvailableAppointments(Resource):
+    def get(self, date_value, duration, start_time, end_time):
+        print("\nInside Available Appointments")
+        try:
+            conn = connect()
+            print("Inside try block", date_value, duration)
+            
+            # print(range(start_time,end_time))
+            # CALCULATE AVAILABLE TIME SLOTS
+            query = """
+                    -- AVAILABLE TIME SLOTS QUERY - WORKS
+                    WITH ats AS (
+                    -- CALCULATE AVAILABLE TIME SLOTS
+                    SELECT 
+                        row_num,
+                        cast(begin_datetime as time) AS begin_time,
+                        cast(end_datetime as time) AS end_time
+                    FROM(
+                        -- GET TIME SLOTS
+                        SELECT ts.*,
+                            ROW_NUMBER() OVER() AS row_num,
+                            TIME(ts.begin_datetime) AS ts_begin,
+                            TIME(ts.end_datetime) AS ts_end,
+                            meet_dur.*
+                        FROM skedul.time_slots ts
+                        -- GET CURRENT APPOINTMENTS
+                        LEFT JOIN (
+                            SELECT -- *,
+                                meeting_unique_id,
+                                meetDate,
+                                meetTime AS start_time,
+                                duration,
+                                ADDTIME(meetTime, duration) AS end_time,
+                                cast(concat(meetDate, ' ', meetTime) as datetime) as start,
+                                cast(concat(meetDate, ' ', ADDTIME(meetTime, duration)) as datetime) as end
+                            FROM skedul.meetings
+                            LEFT JOIN skedul.event_types
+                            ON event_id = event_unique_id    
+                            WHERE meetDate = '""" + date_value + """') AS meet_dur
+                        ON TIME(ts.begin_datetime) = meet_dur.start_time
+                            OR (TIME(ts.begin_datetime) > meet_dur.start_time AND TIME(end_datetime) <= ADDTIME(meet_dur.end_time,"0:29"))
+                        )AS taadpa
+                     WHERE ISNULL(taadpa.meeting_unique_id) AND (taadpa.ts_begin BETWEEN '""" + start_time + """' AND '""" + end_time + """')
+                    )
+
+                    SELECT *
+                    FROM (
+                        SELECT -- *,
+                            row_num,
+                            DATE_FORMAT(begin_time, '%T') AS "begin_time",
+                            CASE
+                                WHEN ISNULL(row_num_hr) THEN "0:29:59"
+                                WHEN ISNULL(row_num_hrhalf) THEN "0:59:59"
+                                WHEN ISNULL(row_num_twohr) THEN "1:29:59"
+                                ELSE "1:59:59"
+                            END AS available_duration
+                        FROM (
+                            SELECT *
+                            FROM ats
+                            LEFT JOIN (
+                                SELECT 	
+                                    row_num as row_num_hr,
+                                    begin_time AS begin_time_hr,
+                                    end_time AS end_time_hr
+                                FROM ats) AS ats1
+                            ON ats.row_num + 1 = ats1.row_num_hr
+                            LEFT JOIN (
+                                SELECT 	
+                                    row_num as row_num_hrhalf,
+                                    begin_time AS begin_time_hrhalf,
+                                    end_time AS end_time_hrhalf
+                                FROM ats) AS ats2
+                            ON ats.row_num + 2 = ats2.row_num_hrhalf
+                            LEFT JOIN (
+                                SELECT 	
+                                    row_num as row_num_twohr,
+                                    begin_time AS begin_time_twohr,
+                                    end_time AS end_time_twohr
+                                FROM ats) AS ats3
+                            ON ats.row_num + 3 = ats3.row_num_twohr) AS atss) AS atsss
+                    WHERE '""" + duration + """' <= available_duration;
+                    """
+
+            available_times = execute(query, 'get', conn)
+            print("Available Times: ", str(available_times['result']))
+            print("Number of time slots: ", len(available_times['result']))
+            # print("Available Times: ", str(available_times['result'][0]["appt_start"]))
+
+            return available_times
+        
+        except:
+            raise BadRequest('Available Time Request failed, please try again later.')
+        finally:
+            disconnect(conn)
 
 # -- DEFINE APIS -------------------------------------------------------------------------------
 
@@ -1684,6 +1800,9 @@ api.add_resource(GetAllEventsUser, "/api/v2/GetAllEventsUser/<string:user_id>")
 api.add_resource(GetEvent, "/api/v2/GetEvent/<string:event_id>")
 # schedule endpoints
 api.add_resource(GetSchedule, "/api/v2/GetSchedule/<string:user_id>")
+# schedule endpoints
+api.add_resource(AvailableAppointments, "/api/v2/AvailableAppointments/<string:date_value>/<string:duration>/<string:start_time>,<string:end_time>")
+
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 if __name__ == "__main__":
