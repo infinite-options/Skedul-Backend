@@ -1769,6 +1769,82 @@ class AvailableAppointments(Resource):
         finally:
             disconnect(conn)
 
+class AddMeeting(Resource):
+    def post(self):
+        print("In AddMeeting")
+        response = {}
+        items = {}
+        try:
+            conn = connect()
+            print("Before Data")
+            data = request.get_json(force=True)
+            print(data)
+            view_id = data["view_id"]
+            user_id = data["user_id"]
+            event_id = data["event_id"]
+            meeting_name = data["meeting_name"]
+            print(meeting_name)
+            location = data["location"]
+            print(location)
+            attendees = data["attendees"]
+            print(attendees)
+            meeting_date = data["meeting_date"]
+            meeting_time = data["meeting_time"]
+            print(meeting_time)
+            query = ["CALL skedul.get_meeting_id;"]
+            print(query)
+            NewIDresponse = execute(query[0], "get", conn)
+            print(NewIDresponse)
+            NewID = NewIDresponse["result"][0]["new_id"]
+            print("NewID = ", NewID)
+
+            query = (
+                """
+                    INSERT INTO skedul.meetings
+                    SET meeting_unique_id  = \'"""
+                + str(NewID)
+                + """\',
+                        user_id = \'"""
+                + str(user_id)
+                + """\',
+                        view_id = \'"""
+                + str(view_id)
+                + """\',
+                event_id = \'"""
+                + str(event_id)
+                + """\',
+                        meeting_name = \'"""
+                + str(meeting_name).replace("'", "''")
+                + """\',
+                        location = \'"""
+                + str(location).replace("'", "''")
+                + """\',
+                guest_email= \'"""
+                + json.dumps(attendees)
+                + """\',
+                        meetDate= \'"""
+                + str(meeting_date)
+                + """\',
+                        meetTime = \'"""
+                + str(meeting_time)
+                + """\';
+                    """
+            )
+            print(query)
+            items = execute(query, "post", conn)
+            print(items)
+
+            if items["code"] == 281:
+                response["message"] = "New meeting Added"
+                return response, 200
+            else:
+                return items
+
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
 # -- DEFINE APIS -------------------------------------------------------------------------------
 
 api.add_resource(
@@ -1802,7 +1878,7 @@ api.add_resource(GetEvent, "/api/v2/GetEvent/<string:event_id>")
 api.add_resource(GetSchedule, "/api/v2/GetSchedule/<string:user_id>")
 # schedule endpoints
 api.add_resource(AvailableAppointments, "/api/v2/AvailableAppointments/<string:date_value>/<string:duration>/<string:start_time>,<string:end_time>")
-
+api.add_resource(AddMeeting, "/api/v2/AddMeeting")
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 if __name__ == "__main__":
