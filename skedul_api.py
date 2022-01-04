@@ -27,6 +27,7 @@ import random
 import string
 import stripe
 
+
 from flask import Flask, request, render_template
 from flask_restful import Resource, Api
 from flask_cors import CORS
@@ -116,31 +117,24 @@ stripe.api_key = stripe_secret_test_key
 CORS(app)
 
 # --------------- Mail Variables ------------------
-# Mail username and password loaded in zappa_settings.json file
-app.config["MAIL_USERNAME"] = os.environ.get("SUPPORT_EMAIL")
-app.config["MAIL_PASSWORD"] = os.environ.get("SUPPORT_PASSWORD")
-app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("SUPPORT_EMAIL")
-
-# Use locally defined Username and Password to test via localhost and Postman
-# app.config['MAIL_USERNAME'] = 'support@skedulayurveda.com'
-# app.config['MAIL_PASSWORD'] = '<enter password here>'
-# app.config['MAIL_DEFAULT_SENDER'] = 'support@skedulayurveda.com'
-
 # Setting for mydomain.com
 app.config["MAIL_SERVER"] = "smtp.mydomain.com"
 app.config["MAIL_PORT"] = 465
 
-# Setting for gmail
-# app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-# app.config['MAIL_PORT'] = 465
-
-
+# Mail username and password loaded in zappa_settings.json file
 app.config["MAIL_USE_TLS"] = False
 app.config["MAIL_USE_SSL"] = True
-
+# pp.config["MAIL_USERNAME"] = os.environ.get("SUPPORT_EMAIL")
+app.config["MAIL_USERNAME"] = "support@nityaayurveda.com"
+# app.config["MAIL_PASSWORD"] = os.environ.get("SUPPORT_PASSWORD")
+app.config["MAIL_PASSWORD"] = "SupportNitya1"
+# app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("SUPPORT_EMAIL")
+app.config["MAIL_DEFAULT_SENDER"] = "support@nityaayurveda.com"
+app.config["MAIL_SUPPRESS_SEND"] = False
 
 # Set this to false when deploying to live application
 app.config["DEBUG"] = True
+app.testing = False
 # app.config["DEBUG"] = False
 
 app.config["STRIPE_SECRET_KEY"] = os.environ.get("STRIPE_SECRET_KEY")
@@ -1068,7 +1062,9 @@ class UserSocialLogin(Resource):
             conn = connect()
             temp = False
             emails = execute(
-                """SELECT user_unique_id, user_email_id, google_auth_token from users;""", "get", conn
+                """SELECT user_unique_id, user_email_id, google_auth_token from users;""",
+                "get",
+                conn,
             )
             for i in range(len(emails["result"])):
                 email = emails["result"][i]["user_email_id"]
@@ -1155,22 +1151,19 @@ class AddEvent(Resource):
             }
 
             print("Data Received")
-            if(duration!= ''):
+            if duration != "":
                 print(duration[2:4])
-                if(duration[2:4] == "30"):
-                    duration= duration.replace("00", "59")
-                    duration= duration.replace("30", "29")
+                if duration[2:4] == "30":
+                    duration = duration.replace("00", "59")
+                    duration = duration.replace("30", "29")
                 else:
-                    duration= duration.replace("00", "59")
+                    duration = duration.replace("00", "59")
                     print(duration)
-                    x = int (duration[0])
-                    x-=1
-                    position =0
-                    duration = duration[:position] + str(x)+ duration[position+1:]
+                    x = int(duration[0])
+                    x -= 1
+                    position = 0
+                    duration = duration[:position] + str(x) + duration[position + 1 :]
                     print(duration)
-                
-                    
-                    
 
             query = ["CALL skedul.get_event_id;"]
             print(query)
@@ -1388,6 +1381,33 @@ class GetEvent(Resource):
             disconnect(conn)
 
 
+class SendEmail(Resource):
+    def post(self, email):
+        try:
+            conn = connect()
+
+            msg = Message(
+                subject="Schedule a meeting",
+                sender="support@nityaayurveda.com",
+                recipients=[email],
+            )
+
+            msg.body = (
+                "Hello!\n\n"
+                "Please click on the link below to schedule a meeting with.\n\n"
+                "Email support@nityaayurveda.com if you run into any problems or have any questions.\n"
+                "Thx - The Skedul Team"
+            )
+
+            print(msg.body)
+            mail.send(msg)
+            return "Email Sent"
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+
 # -- VIEW PAGE ----------------
 
 
@@ -1552,7 +1572,10 @@ class GetView(Resource):
             raise BadRequest("Request failed, please try again later.")
         finally:
             disconnect(conn)
+
+
 # -- SCHEDULE PAGE -----------
+
 
 class GetSchedule(Resource):
     def get(self, user_id):
@@ -1674,16 +1697,18 @@ class GetSchedule(Resource):
         finally:
             disconnect(conn)
 
+
 class AvailableAppointments(Resource):
     def get(self, date_value, duration, start_time, end_time):
         print("\nInside Available Appointments")
         try:
             conn = connect()
             print("Inside try block", date_value, duration)
-            
+
             # print(range(start_time,end_time))
             # CALCULATE AVAILABLE TIME SLOTS
-            query = """
+            query = (
+                """
                     -- AVAILABLE TIME SLOTS QUERY - WORKS
                     WITH ats AS (
                     -- CALCULATE AVAILABLE TIME SLOTS
@@ -1712,11 +1737,17 @@ class AvailableAppointments(Resource):
                             FROM skedul.meetings
                             LEFT JOIN skedul.event_types
                             ON event_id = event_unique_id    
-                            WHERE meetDate = '""" + date_value + """') AS meet_dur
+                            WHERE meetDate = '"""
+                + date_value
+                + """') AS meet_dur
                         ON TIME(ts.begin_datetime) = meet_dur.start_time
                             OR (TIME(ts.begin_datetime) > meet_dur.start_time AND TIME(end_datetime) <= ADDTIME(meet_dur.end_time,"0:29"))
                         )AS taadpa
-                     WHERE ISNULL(taadpa.meeting_unique_id) AND (taadpa.ts_begin BETWEEN '""" + start_time + """' AND '""" + end_time + """')
+                     WHERE ISNULL(taadpa.meeting_unique_id) AND (taadpa.ts_begin BETWEEN '"""
+                + start_time
+                + """' AND '"""
+                + end_time
+                + """')
                     )
 
                     SELECT *
@@ -1754,20 +1785,24 @@ class AvailableAppointments(Resource):
                                     end_time AS end_time_twohr
                                 FROM ats) AS ats3
                             ON ats.row_num + 3 = ats3.row_num_twohr) AS atss) AS atsss
-                    WHERE '""" + duration + """' <= available_duration;
+                    WHERE '"""
+                + duration
+                + """' <= available_duration;
                     """
+            )
 
-            available_times = execute(query, 'get', conn)
-            print("Available Times: ", str(available_times['result']))
-            print("Number of time slots: ", len(available_times['result']))
+            available_times = execute(query, "get", conn)
+            print("Available Times: ", str(available_times["result"]))
+            print("Number of time slots: ", len(available_times["result"]))
             # print("Available Times: ", str(available_times['result'][0]["appt_start"]))
 
             return available_times
-        
+
         except:
-            raise BadRequest('Available Time Request failed, please try again later.')
+            raise BadRequest("Available Time Request failed, please try again later.")
         finally:
             disconnect(conn)
+
 
 class AddMeeting(Resource):
     def post(self):
@@ -1845,6 +1880,7 @@ class AddMeeting(Resource):
         finally:
             disconnect(conn)
 
+
 # -- DEFINE APIS -------------------------------------------------------------------------------
 
 api.add_resource(
@@ -1874,10 +1910,14 @@ api.add_resource(UpdateEvent, "/api/v2/UpdateEvent/<string:event_id>")
 api.add_resource(GetAllEvents, "/api/v2/GetAllEvents/<string:view_id>")
 api.add_resource(GetAllEventsUser, "/api/v2/GetAllEventsUser/<string:user_id>")
 api.add_resource(GetEvent, "/api/v2/GetEvent/<string:event_id>")
+api.add_resource(SendEmail, "/api/v2/sendEmail/<string:email>")
 # schedule endpoints
 api.add_resource(GetSchedule, "/api/v2/GetSchedule/<string:user_id>")
 # schedule endpoints
-api.add_resource(AvailableAppointments, "/api/v2/AvailableAppointments/<string:date_value>/<string:duration>/<string:start_time>,<string:end_time>")
+api.add_resource(
+    AvailableAppointments,
+    "/api/v2/AvailableAppointments/<string:date_value>/<string:duration>/<string:start_time>,<string:end_time>",
+)
 api.add_resource(AddMeeting, "/api/v2/AddMeeting")
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
