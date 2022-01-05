@@ -726,6 +726,45 @@ class UserToken(Resource):
             disconnect(conn)
 
 
+# get user tokens
+class UserDetails(Resource):
+    def get(self, user_id):
+        print("In userDetails")
+        response = {}
+        items = {}
+
+        try:
+            conn = connect()
+            query = None
+
+            query = (
+                """SELECT user_unique_id
+                                , user_email_id
+                                , google_auth_token
+                                , google_refresh_token
+                        FROM
+                        users WHERE user_unique_id = \'"""
+                + user_id
+                + """\';"""
+            )
+
+            items = execute(query, "get", conn)
+            print(items)
+            response["message"] = "successful"
+            response["user_unique_id"] = items["result"][0]["user_unique_id"]
+            response["user_email_id"] = items["result"][0]["user_email_id"]
+            response["google_auth_token"] = items["result"][0]["google_auth_token"]
+            response["google_refresh_token"] = items["result"][0][
+                "google_refresh_token"
+            ]
+
+            return response, 200
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+
 # updating access token if expired
 class UpdateAccessToken(Resource):
     def post(self, user_unique_id):
@@ -1385,7 +1424,9 @@ class SendEmail(Resource):
     def post(self, email):
         try:
             conn = connect()
-
+            data = request.get_json(force=True)
+            url = data["url"]
+            print(url)
             msg = Message(
                 subject="Schedule a meeting",
                 sender="support@nityaayurveda.com",
@@ -1395,7 +1436,9 @@ class SendEmail(Resource):
             msg.body = (
                 "Hello!\n\n"
                 "Please click on the link below to schedule a meeting with.\n\n"
-                "Email support@nityaayurveda.com if you run into any problems or have any questions.\n"
+                "{}".format(url)
+                + "\n\n"
+                + "Email support@nityaayurveda.com if you run into any problems or have any questions.\n"
                 "Thx - The Skedul Team"
             )
 
@@ -1893,6 +1936,8 @@ api.add_resource(UserSignUp, "/api/v2/UserSignUp")
 api.add_resource(UserSocialSignUp, "/api/v2/UserSocialSignUp")
 api.add_resource(UpdateAccessToken, "/api/v2/UpdateAccessToken/<string:user_unique_id>")
 api.add_resource(UserToken, "/api/v2/UserToken/<string:user_email_id>")
+api.add_resource(UserDetails, "/api/v2/UserDetails/<string:user_id>")
+
 api.add_resource(Login, "/api/v2/Login")
 api.add_resource(AccessRefresh, "/api/v2/AccessRefresh/<string:user_unique_id>")
 api.add_resource(UserLogin, "/api/v2/UserLogin/<string:email_id>,<string:password>")
@@ -1904,6 +1949,7 @@ api.add_resource(AddView, "/api/v2/AddView")
 api.add_resource(UpdateView, "/api/v2/UpdateView/<string:view_id>")
 api.add_resource(GetAllViews, "/api/v2/GetAllViews/<string:user_id>")
 api.add_resource(GetView, "/api/v2/GetView/<string:view_id>")
+
 # events endpoints
 api.add_resource(AddEvent, "/api/v2/AddEvent")
 api.add_resource(UpdateEvent, "/api/v2/UpdateEvent/<string:event_id>")
