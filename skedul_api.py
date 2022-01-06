@@ -1924,6 +1924,50 @@ class AddMeeting(Resource):
             disconnect(conn)
 
 
+class GetMeeting(Resource):
+    def get(self, user_id):
+        print("In GetMeeting")
+        response = {}
+        items = {}
+
+        try:
+            conn = connect()
+
+            query = (
+                """SELECT -- *,
+
+                    meeting_unique_id,
+                    skedul.meetings.view_id,
+                    event_id,
+                    skedul.meetings.user_id,
+                    meeting_name,
+                    skedul.meetings.location,
+                    guest_email,
+                    duration,
+                    meetTime AS start_time,
+                    ADDTIME(meetTime, duration) AS end_time,
+                    cast(concat(meetDate, ' ', meetTime) as datetime) as start,
+                    cast(concat(meetDate, ' ', ADDTIME(meetTime, duration)) as datetime) as end
+                    FROM skedul.meetings
+                    LEFT JOIN skedul.event_types
+                    ON event_id = event_unique_id 
+                    WHERE skedul.meetings.user_id = \'"""
+                + user_id
+                + """\';"""
+            )
+            print(query)
+            items = execute(query, "get", conn)
+
+            response["message"] = "successful"
+            response["result"] = items
+
+            return response, 200
+        except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+
 # -- DEFINE APIS -------------------------------------------------------------------------------
 
 api.add_resource(
@@ -1965,6 +2009,7 @@ api.add_resource(
     "/api/v2/AvailableAppointments/<string:date_value>/<string:duration>/<string:start_time>,<string:end_time>",
 )
 api.add_resource(AddMeeting, "/api/v2/AddMeeting")
+api.add_resource(GetMeeting, "/api/v2/GetMeeting/<string:user_id>")
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 if __name__ == "__main__":
