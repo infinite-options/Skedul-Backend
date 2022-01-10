@@ -125,11 +125,11 @@ app.config["MAIL_PORT"] = 465
 app.config["MAIL_USE_TLS"] = False
 app.config["MAIL_USE_SSL"] = True
 # pp.config["MAIL_USERNAME"] = os.environ.get("SUPPORT_EMAIL")
-app.config["MAIL_USERNAME"] = "support@skedule.online"
+app.config["MAIL_USERNAME"] = "support@skedul.online"
 # app.config["MAIL_PASSWORD"] = os.environ.get("SUPPORT_PASSWORD")
 app.config["MAIL_PASSWORD"] = "SupportSkedul1"
 # app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("SUPPORT_EMAIL")
-app.config["MAIL_DEFAULT_SENDER"] = "support@skedule.online"
+app.config["MAIL_DEFAULT_SENDER"] = "support@skedul.online"
 app.config["MAIL_SUPPRESS_SEND"] = False
 
 # Set this to false when deploying to live application
@@ -1444,7 +1444,7 @@ class SendEmail(Resource):
             print(url)
             msg = Message(
                 subject="Schedule a meeting",
-                sender="support@skedule.online",
+                sender="support@skedul.online",
                 recipients=[email],
             )
 
@@ -1453,8 +1453,8 @@ class SendEmail(Resource):
                 "Please click on the link below to schedule a meeting with.\n\n"
                 "{}".format(url)
                 + "\n\n"
-                + "Email support@skedule.online if you run into any problems or have any questions.\n"
-                "Thx - The Skedul Team"
+                + "Email support@skedul.online if you run into any problems or have any questions.\n"
+                "Thanks - The Skedul Team"
             )
 
             print(msg.body)
