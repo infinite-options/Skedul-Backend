@@ -125,11 +125,11 @@ app.config["MAIL_PORT"] = 465
 app.config["MAIL_USE_TLS"] = False
 app.config["MAIL_USE_SSL"] = True
 # pp.config["MAIL_USERNAME"] = os.environ.get("SUPPORT_EMAIL")
-app.config["MAIL_USERNAME"] = "support@nityaayurveda.com"
+app.config["MAIL_USERNAME"] = "support@skedule.online"
 # app.config["MAIL_PASSWORD"] = os.environ.get("SUPPORT_PASSWORD")
-app.config["MAIL_PASSWORD"] = "SupportNitya1"
+app.config["MAIL_PASSWORD"] = "SupportSkedul1"
 # app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("SUPPORT_EMAIL")
-app.config["MAIL_DEFAULT_SENDER"] = "support@nityaayurveda.com"
+app.config["MAIL_DEFAULT_SENDER"] = "support@skedule.online"
 app.config["MAIL_SUPPRESS_SEND"] = False
 
 # Set this to false when deploying to live application
@@ -740,6 +740,8 @@ class UserDetails(Resource):
             query = (
                 """SELECT user_unique_id
                                 , user_email_id
+                                , user_first_name
+                                , user_last_name
                                 , google_auth_token
                                 , google_refresh_token
                         FROM
@@ -752,6 +754,8 @@ class UserDetails(Resource):
             print(items)
             response["message"] = "successful"
             response["user_unique_id"] = items["result"][0]["user_unique_id"]
+            response["user_first_name"] = items["result"][0]["user_first_name"]
+            response["user_last_name"] = items["result"][0]["user_last_name"]
             response["user_email_id"] = items["result"][0]["user_email_id"]
             response["google_auth_token"] = items["result"][0]["google_auth_token"]
             response["google_refresh_token"] = items["result"][0][
@@ -1183,26 +1187,37 @@ class AddEvent(Resource):
             before_time = buffer_time["before"]["time"]
             after_is_enable = buffer_time["after"]["is_enabled"]
             after_time = buffer_time["after"]["time"]
-            print("Date Received")
+
             buffer = {
                 "before": {"is_enabled": before_is_enable, "time": before_time},
                 "after": {"is_enabled": after_is_enable, "time": after_time},
             }
 
-            print("Data Received")
             if duration != "":
-                print(duration[2:4])
-                if duration[2:4] == "30":
-                    duration = duration.replace("00", "59")
-                    duration = duration.replace("30", "29")
-                else:
-                    duration = duration.replace("00", "59")
-                    print(duration)
-                    x = int(duration[0])
+                if duration[3:5] == "30":
+                    duration = duration[0:2] + ":29" + ":59"
+                elif duration[0:2] == "00":
+                    x = int(duration[3:5])
+                    print(x)
                     x -= 1
-                    position = 0
-                    duration = duration[:position] + str(x) + duration[position + 1 :]
+                    print(x)
+                    duration = duration[0:2] + ":" + str(x) + ":59"
                     print(duration)
+                elif duration[3:5] == "00" and duration[6:8] == "00":
+                    duration = duration.replace("00", "59")
+                else:
+                    x = int(duration[3:5])
+                    print(x)
+                    x -= 1
+                    print(x)
+                    duration = duration[0:2] + ":" + str(x) + ":59"
+
+                    print(duration)
+                    # x = int(duration[0])
+                    # x -= 1
+                    # position = 0
+                    # duration = duration[:position] + str(x) + duration[position + 1 :]
+                    # print(duration)
 
             query = ["CALL skedul.get_event_id;"]
             print(query)
@@ -1429,7 +1444,7 @@ class SendEmail(Resource):
             print(url)
             msg = Message(
                 subject="Schedule a meeting",
-                sender="support@nityaayurveda.com",
+                sender="support@skedule.online",
                 recipients=[email],
             )
 
@@ -1438,7 +1453,7 @@ class SendEmail(Resource):
                 "Please click on the link below to schedule a meeting with.\n\n"
                 "{}".format(url)
                 + "\n\n"
-                + "Email support@nityaayurveda.com if you run into any problems or have any questions.\n"
+                + "Email support@skedule.online if you run into any problems or have any questions.\n"
                 "Thx - The Skedul Team"
             )
 
