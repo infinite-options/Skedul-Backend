@@ -1204,7 +1204,10 @@ class AddEvent(Resource):
                     duration = duration[0:2] + ":" + str(x) + ":59"
                     print(duration)
                 elif duration[3:5] == "00" and duration[6:8] == "00":
-                    duration = duration.replace("00", "59")
+                    x = int(duration[0:2])
+                    print(x)
+                    x -= 1
+                    duration = "0" + str(x) + ":59" + ":59"
                 else:
                     x = int(duration[3:5])
                     print(x)
@@ -1305,7 +1308,10 @@ class UpdateEvent(Resource):
                     duration = duration[0:2] + ":" + str(x) + ":59"
                     print(duration)
                 elif duration[3:5] == "00" and duration[6:8] == "00":
-                    duration = duration.replace("00", "59")
+                    x = int(duration[0:2])
+                    print(x)
+                    x -= 1
+                    duration = "0" + str(x) + ":59" + ":59"
                 else:
                     x = int(duration[3:5])
                     print(x)
