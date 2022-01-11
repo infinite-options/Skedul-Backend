@@ -1294,6 +1294,27 @@ class UpdateEvent(Resource):
 
             print("Data Received")
 
+            if duration != "":
+                if duration[3:5] == "30":
+                    duration = duration[0:2] + ":29" + ":59"
+                elif duration[0:2] == "00":
+                    x = int(duration[3:5])
+                    print(x)
+                    x -= 1
+                    print(x)
+                    duration = duration[0:2] + ":" + str(x) + ":59"
+                    print(duration)
+                elif duration[3:5] == "00" and duration[6:8] == "00":
+                    duration = duration.replace("00", "59")
+                else:
+                    x = int(duration[3:5])
+                    print(x)
+                    x -= 1
+                    print(x)
+                    duration = duration[0:2] + ":" + str(x) + ":59"
+
+                    print(duration)
+
             query = (
                 """
                     UPDATE skedul.event_types
