@@ -92,7 +92,6 @@ app = Flask(__name__, template_folder="assets")
 
 # --------------- Stripe Variables ------------------
 # these key are using for testing. Customer should use their stripe account's keys instead
-import stripe
 
 
 # STRIPE AND PAYPAL KEYS
@@ -152,6 +151,8 @@ utc = pytz.utc
 # def getNow(): return datetime.strftime(datetime.now(utc), "%Y-%m-%d %H:%M:%S")
 
 # # These statment return Day and Time in Local Time - Not sure about PST vs PDT
+
+
 def getToday():
     return datetime.strftime(datetime.now(), "%Y-%m-%d")
 
@@ -199,6 +200,8 @@ TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
 
 # Connect to MySQL database (API v2)
+
+
 def connect():
     global RDS_PW
     global RDS_HOST
@@ -406,8 +409,10 @@ class GoogleCalenderEvents(Resource):
                 baseUri = "https://www.googleapis.com/calendar/v3/calendars/primary/events?orderBy=startTime&"
                 timeMaxMin = "timeMax=" + end + "&timeMin=" + start
                 url = baseUri + timeMaxMin
-                bearerString = "Bearer " + items["result"][0]["google_auth_token"]
-                headers = {"Authorization": bearerString, "Accept": "application/json"}
+                bearerString = "Bearer " + \
+                    items["result"][0]["google_auth_token"]
+                headers = {"Authorization": bearerString,
+                           "Accept": "application/json"}
                 response = requests.get(url, headers=headers)
                 response.raise_for_status()
                 calendars = response.json().get("items")
@@ -415,7 +420,8 @@ class GoogleCalenderEvents(Resource):
 
             else:
                 print("in else")
-                access_issue_min = int(items["result"][0]["access_expires_in"]) / 60
+                access_issue_min = int(
+                    items["result"][0]["access_expires_in"]) / 60
                 print("in else", access_issue_min)
                 print("in else", items["result"][0]["social_timestamp"])
                 social_timestamp = datetime.strptime(
@@ -484,9 +490,11 @@ class GoogleCalenderEvents(Resource):
                 print(timeMaxMin)
                 url = baseUri + timeMaxMin
                 print(url)
-                bearerString = "Bearer " + items["result"][0]["google_auth_token"]
+                bearerString = "Bearer " + \
+                    items["result"][0]["google_auth_token"]
                 print(bearerString)
-                headers = {"Authorization": bearerString, "Accept": "application/json"}
+                headers = {"Authorization": bearerString,
+                           "Accept": "application/json"}
                 print(headers)
                 response = requests.get(url, headers=headers)
 
@@ -1049,7 +1057,8 @@ class UserLogin(Resource):
             # email_id = data['email_id']
             # password = data['password']
             temp = False
-            emails = execute("""SELECT user_email_id from users;""", "get", conn)
+            emails = execute(
+                """SELECT user_email_id from users;""", "get", conn)
             for i in range(len(emails["result"])):
                 email = emails["result"][i]["user_email_id"]
                 if email == email_id:
@@ -1357,6 +1366,31 @@ class UpdateEvent(Resource):
             disconnect(conn)
 
 
+class DeleteEvent(Resource):
+    def post(self):
+        print("In DeleteEvent")
+        response = {}
+
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            event_id = data['event_id']
+
+            query = """DELETE FROM event_types WHERE event_unique_id = \'""" + event_id + """\';"""
+            execute(query, 'post', conn)
+            query = """DELETE FROM meetings WHERE event_id = \'""" + event_id + """\';"""
+            execute(query, 'post', conn)
+
+            response['message'] = 'successful'
+
+            return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
 class GetAllEvents(Resource):
     def get(self, view_id):
         print("In GetAllEvents")
@@ -1593,6 +1627,33 @@ class UpdateView(Resource):
             disconnect(conn)
 
 
+class DeleteView(Resource):
+    def post(self):
+        print("In DeleteView")
+        response = {}
+
+        try:
+            conn = connect()
+            data = request.get_json(force=True)
+
+            view_id = data['view_id']
+
+            query = """DELETE FROM views WHERE view_unique_id = \'""" + view_id + """\';"""
+            execute(query, 'post', conn)
+            query = """DELETE FROM event_types WHERE view_id = \'""" + view_id + """\';"""
+            execute(query, 'post', conn)
+            query = """DELETE FROM meetings WHERE view_id = \'""" + view_id + """\';"""
+            execute(query, 'post', conn)
+
+            response['message'] = 'successful'
+
+            return response, 200
+        except:
+            raise BadRequest('Request failed, please try again later.')
+        finally:
+            disconnect(conn)
+
+
 class GetAllViews(Resource):
     def get(self, user_id):
         print("In GetAllViews")
@@ -1673,6 +1734,7 @@ class GetSchedule(Resource):
 
             query = (
                 """SELECT view_unique_id
+                            , view_name
                             , (schedule)
                             , color
                         FROM skedul.views
@@ -1696,6 +1758,7 @@ class GetSchedule(Resource):
                     if s["start_time"] != "":
                         sun = {
                             "id": i["view_unique_id"],
+                            "name": i["view_name"],
                             "schedule": s,
                             "color": i["color"],
                         }
@@ -1706,6 +1769,7 @@ class GetSchedule(Resource):
                     if s["start_time"] != "":
                         mon = {
                             "id": i["view_unique_id"],
+                            "name": i["view_name"],
                             "schedule": s,
                             "color": i["color"],
                         }
@@ -1716,6 +1780,7 @@ class GetSchedule(Resource):
                     if s["start_time"] != "":
                         tues = {
                             "id": i["view_unique_id"],
+                            "name": i["view_name"],
                             "schedule": s,
                             "color": i["color"],
                         }
@@ -1726,6 +1791,7 @@ class GetSchedule(Resource):
                     if s["start_time"] != "":
                         wed = {
                             "id": i["view_unique_id"],
+                            "name": i["view_name"],
                             "schedule": s,
                             "color": i["color"],
                         }
@@ -1736,6 +1802,7 @@ class GetSchedule(Resource):
                     if s["start_time"] != "":
                         thurs = {
                             "id": i["view_unique_id"],
+                            "name": i["view_name"],
                             "schedule": s,
                             "color": i["color"],
                         }
@@ -1746,6 +1813,7 @@ class GetSchedule(Resource):
                     if s["start_time"] != "":
                         fri = {
                             "id": i["view_unique_id"],
+                            "name": i["view_name"],
                             "schedule": s,
                             "color": i["color"],
                         }
@@ -1756,6 +1824,7 @@ class GetSchedule(Resource):
                     if s["start_time"] != "":
                         sat = {
                             "id": i["view_unique_id"],
+                            "name": i["view_name"],
                             "schedule": s,
                             "color": i["color"],
                         }
@@ -1884,7 +1953,8 @@ class AvailableAppointments(Resource):
             return available_times
 
         except:
-            raise BadRequest("Available Time Request failed, please try again later.")
+            raise BadRequest(
+                "Available Time Request failed, please try again later.")
         finally:
             disconnect(conn)
 
@@ -2020,25 +2090,31 @@ api.add_resource(
 # account endpoints
 api.add_resource(UserSignUp, "/api/v2/UserSignUp")
 api.add_resource(UserSocialSignUp, "/api/v2/UserSocialSignUp")
-api.add_resource(UpdateAccessToken, "/api/v2/UpdateAccessToken/<string:user_unique_id>")
+api.add_resource(UpdateAccessToken,
+                 "/api/v2/UpdateAccessToken/<string:user_unique_id>")
 api.add_resource(UserToken, "/api/v2/UserToken/<string:user_email_id>")
 api.add_resource(UserDetails, "/api/v2/UserDetails/<string:user_id>")
 
 api.add_resource(Login, "/api/v2/Login")
-api.add_resource(AccessRefresh, "/api/v2/AccessRefresh/<string:user_unique_id>")
-api.add_resource(UserLogin, "/api/v2/UserLogin/<string:email_id>,<string:password>")
+api.add_resource(
+    AccessRefresh, "/api/v2/AccessRefresh/<string:user_unique_id>")
+api.add_resource(
+    UserLogin, "/api/v2/UserLogin/<string:email_id>,<string:password>")
 api.add_resource(UserSocialLogin, "/api/v2/UserSocialLogin/<string:email_id>")
 api.add_resource(GetEmailId, "/api/v2/GetEmailId/<string:email_id>")
 
 # view endpoints
 api.add_resource(AddView, "/api/v2/AddView")
 api.add_resource(UpdateView, "/api/v2/UpdateView/<string:view_id>")
+api.add_resource(DeleteView, "/api/v2/DeleteView")
 api.add_resource(GetAllViews, "/api/v2/GetAllViews/<string:user_id>")
 api.add_resource(GetView, "/api/v2/GetView/<string:view_id>")
 
 # events endpoints
 api.add_resource(AddEvent, "/api/v2/AddEvent")
 api.add_resource(UpdateEvent, "/api/v2/UpdateEvent/<string:event_id>")
+api.add_resource(DeleteEvent, "/api/v2/DeleteEvent")
+
 api.add_resource(GetAllEvents, "/api/v2/GetAllEvents/<string:view_id>")
 api.add_resource(GetAllEventsUser, "/api/v2/GetAllEventsUser/<string:user_id>")
 api.add_resource(GetEvent, "/api/v2/GetEvent/<string:event_id>")
