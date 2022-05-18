@@ -33,7 +33,7 @@ from flask_restful import Resource, Api
 from flask_cors import CORS
 from flask_mail import Mail, Message
 
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 
 # used for serializer email and error handling
 # from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
@@ -382,7 +382,7 @@ class GoogleCalenderEvents(Resource):
                 expires_in = r.json()["expires_in"]
                 print("in if", expires_in)
                 execute(
-                    """UPDATE customers SET 
+                    """UPDATE customers SET
                                 google_auth_token = \'"""
                     + str(auth_token)
                     + """\'
@@ -459,7 +459,7 @@ class GoogleCalenderEvents(Resource):
                     expires_in = r.json()["expires_in"]
                     print("in else", expires_in)
                     execute(
-                        """UPDATE customers SET 
+                        """UPDATE customers SET
                                     google_auth_token = \'"""
                         + str(auth_token)
                         + """\'
@@ -951,7 +951,7 @@ class Login(Resource):
                 if email == "":
                     execute(
                         """
-                        UPDATE users 
+                        UPDATE users
                         SET mobile_refresh_token = \'"""
                         + refresh_token
                         + """\'
@@ -975,7 +975,7 @@ class Login(Resource):
                     print(email)
                     execute(
                         """
-                        UPDATE users 
+                        UPDATE users
                         SET mobile_refresh_token = \'"""
                         + refresh_token
                         + """\'
@@ -1858,15 +1858,85 @@ class AvailableAppointments(Resource):
         try:
             conn = connect()
             print("Inside try block", date_value, duration)
-
+            h, m, s = duration.split(':')
+            interval = math.ceil(
+                ((int(h) * 3600 + int(m) * 60 + int(s))/60)/30)
+            print(type(interval))
             # print(range(start_time,end_time))
             # CALCULATE AVAILABLE TIME SLOTS
-            query = (
-                """
+            # query = (
+            #     """
+            #         -- AVAILABLE TIME SLOTS QUERY - WORKS
+            #         WITH ats AS (
+            #         -- CALCULATE AVAILABLE TIME SLOTS
+            #         SELECT
+            #             row_num,
+            #             cast(begin_datetime as time) AS begin_time,
+            #             cast(end_datetime as time) AS end_time
+            #         FROM(
+            #             -- GET TIME SLOTS
+            #             SELECT ts.*,
+            #                 ROW_NUMBER() OVER() AS row_num,
+            #                 TIME(ts.begin_datetime) AS ts_begin,
+            #                 TIME(ts.end_datetime) AS ts_end,
+            #                 meet_dur.*
+            #             FROM skedul.time_slots ts
+            #             -- GET CURRENT APPOINTMENTS
+            #             LEFT JOIN (
+            #                 SELECT -- *,
+            #                     meeting_unique_id,
+            #                     meetDate,
+            #                     meetTime AS start_time,
+            #                     duration,
+            #                     ADDTIME(meetTime, duration) AS end_time,
+            #                     cast(concat(meetDate, ' ', meetTime) as datetime) as start,
+            #                     cast(concat(meetDate, ' ', ADDTIME(meetTime, duration)) as datetime) as end
+            #                 FROM skedul.meetings
+            #                 LEFT JOIN skedul.event_types
+            #                 ON event_id = event_unique_id
+            #                 WHERE meetDate = '"""
+            #     + date_value
+            #     + """') AS meet_dur
+            #             ON TIME(ts.begin_datetime) = meet_dur.start_time
+            #                 OR (TIME(ts.begin_datetime) > meet_dur.start_time AND TIME(end_datetime) <= ADDTIME(meet_dur.end_time,"0:29"))
+            #             )AS taadpa
+            #          WHERE ISNULL(taadpa.meeting_unique_id) AND (taadpa.ts_begin BETWEEN '"""
+            #     + start_time
+            #     + """' AND '"""
+            #     + end_time
+            #     + """')
+            #         )
+
+            #         SELECT *
+            #         FROM (
+            #             SELECT -- *,
+            #                 row_num,
+            #                 DATE_FORMAT(begin_time, '%T') AS "begin_time",
+            #                 '""" + duration + """' AS available_duration
+            #             FROM (
+            #                 SELECT *
+            #                 FROM ats
+            #                 LEFT JOIN (
+            #                     SELECT
+            #                         row_num as row_num_hr,
+            #                         begin_time AS begin_time_hr,
+            #                         end_time AS end_time_hr
+            #                     FROM ats) AS ats1
+            #                 ON ats.row_num + '""" + interval + """' = ats1.row_num_hr) AS atss) AS atsss
+            #         WHERE '"""
+            #     + duration
+            #     + """' <= available_duration;
+            #         """
+            # )
+            atimes = {'message': 'Successfully executed SQL query.',
+                      'code': 280, 'result': []}
+            for k in range(0, interval):
+                print(k)
+                query = ("""
                     -- AVAILABLE TIME SLOTS QUERY - WORKS
                     WITH ats AS (
                     -- CALCULATE AVAILABLE TIME SLOTS
-                    SELECT 
+                    SELECT
                         row_num,
                         cast(begin_datetime as time) AS begin_time,
                         cast(end_datetime as time) AS end_time
@@ -1890,67 +1960,94 @@ class AvailableAppointments(Resource):
                                 cast(concat(meetDate, ' ', ADDTIME(meetTime, duration)) as datetime) as end
                             FROM skedul.meetings
                             LEFT JOIN skedul.event_types
-                            ON event_id = event_unique_id    
+                            ON event_id = event_unique_id
                             WHERE meetDate = '"""
-                + date_value
-                + """') AS meet_dur
+                         + date_value
+                         + """') AS meet_dur
                         ON TIME(ts.begin_datetime) = meet_dur.start_time
                             OR (TIME(ts.begin_datetime) > meet_dur.start_time AND TIME(end_datetime) <= ADDTIME(meet_dur.end_time,"0:29"))
                         )AS taadpa
                      WHERE ISNULL(taadpa.meeting_unique_id) AND (taadpa.ts_begin BETWEEN '"""
-                + start_time
-                + """' AND '"""
-                + end_time
-                + """')
+                         + start_time
+                         + """' AND '"""
+                         + end_time
+                         + """')
                     )
 
                     SELECT *
                     FROM (
-                        SELECT -- *,
-                            row_num,
-                            DATE_FORMAT(begin_time, '%T') AS "begin_time",
-                            CASE
+                        SELECT  -- *,
+                              row_num,
+                              -- row_num_hr,
+                              DATE_FORMAT(begin_time, '%T') AS "begin_time",
+                              CASE
                                 WHEN ISNULL(row_num_hr) THEN "0:29:59"
-                                WHEN ISNULL(row_num_hrhalf) THEN "0:59:59"
-                                WHEN ISNULL(row_num_twohr) THEN "1:29:59"
-                                ELSE "1:59:59"
-                            END AS available_duration
+                                ELSE '""" + duration + """'
+                              END AS available_duration
                         FROM (
                             SELECT *
                             FROM ats
                             LEFT JOIN (
-                                SELECT 	
+                                SELECT
                                     row_num as row_num_hr,
                                     begin_time AS begin_time_hr,
                                     end_time AS end_time_hr
                                 FROM ats) AS ats1
-                            ON ats.row_num + 1 = ats1.row_num_hr
-                            LEFT JOIN (
-                                SELECT 	
-                                    row_num as row_num_hrhalf,
-                                    begin_time AS begin_time_hrhalf,
-                                    end_time AS end_time_hrhalf
-                                FROM ats) AS ats2
-                            ON ats.row_num + 2 = ats2.row_num_hrhalf
-                            LEFT JOIN (
-                                SELECT 	
-                                    row_num as row_num_twohr,
-                                    begin_time AS begin_time_twohr,
-                                    end_time AS end_time_twohr
-                                FROM ats) AS ats3
-                            ON ats.row_num + 3 = ats3.row_num_twohr) AS atss) AS atsss
-                    WHERE '"""
-                + duration
-                + """' <= available_duration;
-                    """
-            )
+                            ON ats.row_num + """ + str(k) + """ = ats1.row_num_hr
+                          ) AS atss) AS atsss
+                    WHERE '""" + duration + """' <= available_duration; """)
+                # print(query)
+                available_times = execute(query, "get", conn)
+                atimes['result'] = atimes['result'] + \
+                    (available_times['result'])
 
-            available_times = execute(query, "get", conn)
-            print("Available Times: ", str(available_times["result"]))
-            print("Number of time slots: ", len(available_times["result"]))
+            blocked = ["row_num_hr", "begin_time", "available_duration"]
+
+            total = []
+            for i in atimes['result']:
+                for key, value in i.items():
+                    if key not in blocked:
+                        total.append(value)
+
+            counts = {}
+            for i in total:
+                if i in counts.keys():
+                    counts[i] += 1
+                else:
+                    counts[i] = 1
+            finalResult = {'message': 'Successfully executed SQL query.',
+                           'code': 280, 'result': []}
+
+            for key, value in counts.items():
+                if int(value) == interval:
+                    selectKey = key
+                    # print(selectKey)
+                    for i in atimes['result']:
+                        # print(i)
+                        for key, value in i.items():
+                            # print(key, value)
+                            if value == selectKey and key not in blocked:
+                                # print('here')
+                                finalResult['result'].append(i)
+                                # print('finalResult', finalResult)
+
+            # print("Available Times: ", (available_times))
+            # print("Number of time slots: ", len(available_times["result"]))
             # print("Available Times: ", str(available_times['result'][0]["appt_start"]))
+            seen = set()
+            result = {'message': 'Successfully executed SQL query.',
+                      'code': 280, 'result': []}
 
-            return available_times
+            for dic in finalResult['result']:
+                key = (dic['row_num'], dic['begin_time'])
+                if key in seen:
+                    continue
+
+                result['result'].append(dic)
+                seen.add(key)
+
+            print(result['result'])
+            return result
 
         except:
             raise BadRequest(
@@ -2062,7 +2159,7 @@ class GetMeeting(Resource):
                     cast(concat(meetDate, ' ', ADDTIME(meetTime, duration)) as datetime) as end
                     FROM skedul.meetings
                     LEFT JOIN skedul.event_types
-                    ON event_id = event_unique_id 
+                    ON event_id = event_unique_id
                     WHERE skedul.meetings.user_id = \'"""
                 + user_id
                 + """\';"""
