@@ -258,23 +258,17 @@ def serializeResponse(response):
 # OPTIONAL: Set skipSerialization to True to skip default JSON response serialization
 def execute(sql, cmd, conn, skipSerialization=False):
 
-    print("In get 1")
-    print(cmd)
-    print(sql)
+    # print("In SQL Execute Function")
+    # print(cmd)
+    # print(sql)
     response = {}
-    print("In get 2")
     try:
         with conn.cursor() as cur:
-            print("In get 3")
+            print("Before Execute")
             cur.execute(sql)
-            print("In get 4")
-            print(cmd)
-            print(1 is 2)
-            print(cmd is "get")
+            print("After Execute")
             if cmd is "get":
-                print("In get")
                 result = cur.fetchall()
-                print("out of get")
                 response["message"] = "Successfully executed SQL query."
                 # Return status code of 280 for successful GET request
                 response["code"] = 280
@@ -2331,8 +2325,7 @@ class GetAvailableAppointments(Resource):
 
 class GetWeekAvailableAppointments(Resource):
     def get(self, view_id):
-        print("In GetWeekAvailableAppointments")
-        print(view_id)
+        print("In GetWeekAvailableAppointments", view_id)
         response = {}
         items = {}
 
@@ -2398,15 +2391,13 @@ class GetWeekAvailableAppointments(Resource):
                     """)
 
 
-            print(query)
+            # print(query)
             items = execute(query, "get", conn)
-            print(items)
+            # print(items)
             
 
             response["message"] = "successful"
             response["result"] = items["result"]
-            print(items["result"][0]["begin_time"], type(items["result"][0]["begin_time"]))
-            print(items["result"][0]["start_time"], type(items["result"][0]["start_time"]))
 
             return response, 200
         except:
