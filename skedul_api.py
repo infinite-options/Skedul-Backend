@@ -257,12 +257,24 @@ def serializeResponse(response):
 # Set conn parameter to connection object
 # OPTIONAL: Set skipSerialization to True to skip default JSON response serialization
 def execute(sql, cmd, conn, skipSerialization=False):
+
+    print("In get 1")
+    print(cmd)
+    print(sql)
     response = {}
+    print("In get 2")
     try:
         with conn.cursor() as cur:
+            print("In get 3")
             cur.execute(sql)
+            print("In get 4")
+            print(cmd)
+            print(1 is 2)
+            print(cmd is "get")
             if cmd is "get":
+                print("In get")
                 result = cur.fetchall()
+                print("out of get")
                 response["message"] = "Successfully executed SQL query."
                 # Return status code of 280 for successful GET request
                 response["code"] = 280
@@ -1180,6 +1192,7 @@ class AddEvent(Resource):
             data = request.get_json(force=True)
             view_id = data["view_id"]
             print("View ID")
+            print(view_id)
             user_id = data["user_id"]
             print(user_id)
             event_name = data["event_name"]
@@ -1201,10 +1214,13 @@ class AddEvent(Resource):
                 "before": {"is_enabled": before_is_enable, "time": before_time},
                 "after": {"is_enabled": after_is_enable, "time": after_time},
             }
+            print(buffer)
 
             if duration != "":
+                print("1")
                 if duration[3:5] == "30":
                     duration = duration[0:2] + ":29" + ":59"
+                    print("2")
                 elif duration[0:2] == "00":
                     x = int(duration[3:5])
                     print(x)
@@ -1479,9 +1495,7 @@ class GetEvent(Resource):
                             , duration
                             , buffer_time
                         FROM skedul.event_types
-                        WHERE event_unique_id = \'"""
-                + event_id
-                + """\';"""
+                        WHERE event_unique_id = \'""" + event_id + """\';"""
             )
             print(query)
             items = execute(query, "get", conn)
@@ -1703,9 +1717,7 @@ class GetView(Resource):
                             , schedule
                             , color
                         FROM skedul.views
-                        WHERE view_unique_id = \'"""
-                + view_id
-                + """\';"""
+                        WHERE view_unique_id = \'""" + view_id + """\';"""
             )
             print(query)
             items = execute(query, "get", conn)
@@ -1861,7 +1873,7 @@ class AvailableAppointments(Resource):
             h, m, s = duration.split(':')
             interval = math.ceil(
                 ((int(h) * 3600 + int(m) * 60 + int(s))/60)/30)
-            print(type(interval))
+            print("Inverval: ", interval, type(interval))
             # print(range(start_time,end_time))
             # CALCULATE AVAILABLE TIME SLOTS
             # query = (
@@ -1930,6 +1942,7 @@ class AvailableAppointments(Resource):
             # )
             atimes = {'message': 'Successfully executed SQL query.',
                       'code': 280, 'result': []}
+            print("atime", atimes)
             for k in range(0, interval):
                 print(k)
                 query = ("""
@@ -1996,7 +2009,7 @@ class AvailableAppointments(Resource):
                             ON ats.row_num + """ + str(k) + """ = ats1.row_num_hr
                           ) AS atss) AS atsss
                     WHERE '""" + duration + """' <= available_duration; """)
-                # print(query)
+                print('Query ',k,": ",query)
                 available_times = execute(query, "get", conn)
                 atimes['result'] = atimes['result'] + \
                     (available_times['result'])
@@ -2177,6 +2190,232 @@ class GetMeeting(Resource):
             disconnect(conn)
 
 
+# -- SCHEDULE AN EVENT ----------------
+
+class GetEventViewDetails(Resource):
+    def get(self, view_id):
+        print("In GetEventViewDetails")
+        response = {}
+        items = {}
+
+        try:
+            conn = connect()
+
+            # WHERE event_unique_id = \'""" + view_id + """\'
+            query = (
+                """ SELECT e.*,
+                        view_name, schedule, color,
+                        JSON_EXTRACT(schedule, '$.Sunday') AS Sunday,
+                        JSON_EXTRACT(schedule, '$.Monday') AS Monday,
+                        JSON_EXTRACT(schedule, '$.Tuesday') AS Tuesday,
+                        JSON_EXTRACT(schedule, '$.Wednesday') AS Wednesday,
+                        JSON_EXTRACT(schedule, '$.Thursday') AS Thursday,
+                        JSON_EXTRACT(schedule, '$.Friday') AS Friday,
+                        JSON_EXTRACT(schedule, '$.Saturday') AS Saturday
+                    FROM (
+                        SELECT *, 
+                            JSON_UNQUOTE(JSON_EXTRACT(buffer_time, '$.before.time')) AS before_time,
+                            JSON_EXTRACT(buffer_time, '$.before.is_enabled') AS before_enabled, 
+                            JSON_UNQUOTE(JSON_EXTRACT(buffer_time, '$.after.time')) AS after_time, 
+                            JSON_EXTRACT(buffer_time, '$.after.is_enabled') AS after_enabled
+                    FROM skedul.event_types
+                    WHERE event_unique_id = \'""" + view_id + """\'
+                    ) AS e
+                    LEFT JOIN skedul.views AS v
+                    ON e.view_id = v.view_unique_id;"""
+            )
+            # print(query)
+            items = execute(query, "get", conn)
+            # print(items)
+
+            response["message"] = "successful"
+            response["result"] = items["result"]
+
+            return response, 200
+        except:
+            raise BadRequest("GetEventViewDetails Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+
+
+class GetAvailableAppointments(Resource):
+    def get(self, view_id, day_selected):
+        print("In GetEventViewDetails")
+        print(view_id, day_selected)
+        response = {}
+        items = {}
+
+        try:
+            conn = connect()
+
+            # WHERE event_unique_id = \'""" + view_id + """\'
+            # meetDate = \'""" + day_selected + """\'
+            query = (
+                """ SELECT ats.*, meetings.Actual_Start, meetings.Actual_end, available.start_time, available.end_time
+                    FROM (SELECT 
+                            ROW_NUMBER() OVER() AS row_num,
+                            SUBSTRING_INDEX(begin_datetime,' ',-1) AS begin_time,
+                            SUBSTRING_INDEX(end_datetime,' ',-1) AS end_time
+                        FROM skedul.time_slots 
+                    ) AS ats
+                    LEFT JOIN (SELECT *,
+                                    IF (before_enabled = true,SUBTIME(str_to_date(meetTime,"%T"), before_time ),meetTime) Actual_Start, 
+                                    IF (after_enabled = true,ADDTIME(str_to_date(endTime,"%T"), after_time),endTime) Actual_End
+                                FROM (
+                                SELECT m.*,
+                                    duration, 
+                                    ADDTIME(str_to_date(meetTime,"%T"), duration) AS endTime,
+                                    event_name,
+                                    JSON_EXTRACT(buffer_time, '$.before.time') AS before_time,
+                                    JSON_EXTRACT(buffer_time, '$.before.is_enabled') AS before_enabled, 
+                                    JSON_EXTRACT(buffer_time, '$.after.time') AS after_time, 
+                                    JSON_EXTRACT(buffer_time, '$.after.is_enabled') AS after_enabled
+                                    
+                                FROM (
+                                    SELECT * 
+                                    FROM skedul.meetings
+                                    WHERE user_id =  (SELECT DISTINCT user_id 
+                                                    FROM skedul.meetings
+                                                    WHERE event_id = \'""" + view_id + """\') 
+                                    AND meetDate = \'""" + day_selected + """\'
+                                    ) AS m
+                                LEFT JOIN skedul.event_types
+                                        ON event_id = event_unique_id) AS meeting_info 
+                    ) AS meetings
+                    ON (ats.begin_time >= meetings.Actual_Start AND ats.end_time <=meetings.Actual_End) 
+                    OR (ats.begin_time <= meetings.Actual_Start AND ats.end_time > meetings.Actual_Start)
+                    OR (ats.begin_time <= meetings.Actual_End AND ats.end_time > meetings.Actual_End)
+                    LEFT JOIN (SELECT view_unique_id, user_id, view_name, color, day, r.*
+                    FROM (SELECT *,
+                            WEEKDAY(\'""" + day_selected + """\') AS day,
+                                CASE WEEKDAY(\'""" + day_selected + """\')
+                                    WHEN '0' THEN  JSON_EXTRACT(schedule, '$.Monday')
+                                    WHEN '1' THEN  JSON_EXTRACT(schedule, '$.Tuesday')
+                                    WHEN '2' THEN  JSON_EXTRACT(schedule, '$.Wednesday')
+                                    WHEN '3' THEN  JSON_EXTRACT(schedule, '$.Thursday')
+                                    WHEN '4' THEN  JSON_EXTRACT(schedule, '$.Friday')
+                                    WHEN '5' THEN  JSON_EXTRACT(schedule, '$.Saturday')
+                                    WHEN '6' THEN JSON_EXTRACT(schedule, '$.Sunday')
+                                END AS dday
+                        FROM skedul.views
+                        WHERE view_unique_id =  (SELECT DISTINCT view_id 
+                                            FROM skedul.meetings
+                                            WHERE event_id = \'""" + view_id + """\')
+                        GROUP BY user_id) AS t,
+                        JSON_TABLE(t.dday, '$[*]'
+                        COLUMNS (
+                                    a FOR ORDINALITY,
+                                    start_time VARCHAR(40)  PATH '$.start_time',
+                                    end_time VARCHAR(40)  PATH '$.end_time')
+                        ) AS r 
+                    ) AS available
+                    ON (ats.begin_time >= available.start_time AND ats.end_time <=available.end_time) 
+                    OR (ats.begin_time <= available.start_time AND ats.end_time > available.start_time)
+                    OR (ats.begin_time <= available.end_time AND ats.end_time > available.end_time)
+                    WHERE ISNULL(meetings.Actual_Start) AND available.start_time IS NOT NULL;"""
+            )
+            # print(query)
+            items = execute(query, "get", conn)
+            # print(items)
+
+            response["message"] = "successful"
+            response["result"] = items["result"]
+
+            return response, 200
+        except:
+            raise BadRequest("GetAvailableAppointments Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+
+class GetWeekAvailableAppointments(Resource):
+    def get(self, view_id):
+        print("In GetWeekAvailableAppointments")
+        print(view_id)
+        response = {}
+        items = {}
+
+        try:
+            conn = connect()
+
+            # WHERE event_unique_id = \'""" + view_id + """\'
+            query = ("""
+                    SELECT ats.*, meetings.Actual_Start, meetings.Actual_end, available.start_time, available.finish_time
+                    FROM (
+                        SELECT 
+                            ROW_NUMBER() OVER() AS row_num, meeting_day, day_index,
+                            SUBSTRING_INDEX(begin_datetime,' ',-1) AS begin_time,
+                            SUBSTRING_INDEX(end_datetime,' ',-1) AS end_time
+                        FROM skedul.wk_time_slots
+                        ) as ats
+                    -- LEFT JOIN WITH EXISTING MEETINGS
+                    LEFT JOIN (SELECT *,
+                        IF (before_enabled = true,SUBTIME(meetTime, before_time),meetTime) Actual_Start,
+                        IF (after_enabled = true,ADDTIME(endTime, after_time),endTime) Actual_End
+                    FROM (
+                        SELECT m.*,
+                            duration, 
+                            ADDTIME(meetTime, duration) AS endTime,
+                            event_name,
+                            JSON_EXTRACT(buffer_time, '$.before.time') AS before_time,
+                            JSON_EXTRACT(buffer_time, '$.before.is_enabled') AS before_enabled, 
+                            JSON_EXTRACT(buffer_time, '$.after.time') AS after_time, 
+                            JSON_EXTRACT(buffer_time, '$.after.is_enabled') AS after_enabled
+                        FROM (
+                            SELECT * 
+                            FROM skedul.meetings
+                            WHERE user_id =  (SELECT DISTINCT user_id 
+                                            FROM skedul.meetings
+                                            WHERE event_id = \'""" + view_id + """\') 
+                            AND meetDate >= CURDATE() AND meetDate < ADDDATE(CURDATE(),7)
+                            ) AS m
+                        LEFT JOIN skedul.event_types
+                                ON event_id = event_unique_id
+                        ) AS meeting_info
+                    ) AS meetings
+                    ON ats.day_index = WEEKDAY(meetings.meetDate) AND ( 
+                        (ats.begin_time >= meetings.Actual_Start AND ats.end_time <=meetings.Actual_End) OR
+                        (ats.begin_time <= meetings.Actual_Start AND ats.end_time > meetings.Actual_Start) OR
+                        (ats.begin_time <= meetings.Actual_End AND ats.end_time > meetings.Actual_End) )
+                    -- LEFT JOIN WITH AVAILABLE TIMES
+                    LEFT JOIN (
+                        SELECT *, CONCAT(start_hhmm,":00") AS start_time, CONCAT(finish_hhmm,":00") AS finish_time
+                        FROM skedul.new_view3,
+                        JSON_TABLE(new_view3.available_times, '$[*]'
+                                COLUMNS (
+                                        a FOR ORDINALITY,
+                                        start_hhmm VARCHAR(40)  PATH '$.start_time',
+                                        finish_hhmm VARCHAR(40)  PATH '$.end_time')
+                            ) AS r
+                        WHERE event_unique_id = \'""" + view_id + """\'
+                    ) AS available
+                    ON ats.meeting_day = available.Weekday AND (
+                        (CAST(ats.begin_time AS TIME) >= CAST(available.start_time AS TIME) AND CAST(ats.end_time AS TIME) <= CAST(available.finish_time AS TIME)) OR
+                        (CAST(ats.begin_time AS TIME) <= CAST(available.start_time AS TIME) AND CAST(ats.end_time AS TIME) > CAST(available.start_time AS TIME)) OR
+                        (CAST(ats.begin_time AS TIME) < CAST(available.finish_time AS TIME) AND CAST(ats.end_time AS TIME) >= CAST(available.finish_time AS TIME)))
+                    WHERE ISNULL(meetings.Actual_Start) AND available.start_time IS NOT NULL;
+                    """)
+
+
+            print(query)
+            items = execute(query, "get", conn)
+            print(items)
+            
+
+            response["message"] = "successful"
+            response["result"] = items["result"]
+            print(items["result"][0]["begin_time"], type(items["result"][0]["begin_time"]))
+            print(items["result"][0]["start_time"], type(items["result"][0]["start_time"]))
+
+            return response, 200
+        except:
+            raise BadRequest("GetAvailableAppointments Request failed.")
+        finally:
+            disconnect(conn)
+
+
+
 # -- DEFINE APIS -------------------------------------------------------------------------------
 
 api.add_resource(
@@ -2218,13 +2457,13 @@ api.add_resource(GetEvent, "/api/v2/GetEvent/<string:event_id>")
 api.add_resource(SendEmail, "/api/v2/sendEmail/<string:email>")
 # schedule endpoints
 api.add_resource(GetSchedule, "/api/v2/GetSchedule/<string:user_id>")
-# schedule endpoints
-api.add_resource(
-    AvailableAppointments,
-    "/api/v2/AvailableAppointments/<string:date_value>/<string:duration>/<string:start_time>,<string:end_time>",
-)
+api.add_resource(AvailableAppointments, "/api/v2/AvailableAppointments/<string:date_value>/<string:duration>/<string:start_time>,<string:end_time>")
 api.add_resource(AddMeeting, "/api/v2/AddMeeting")
 api.add_resource(GetMeeting, "/api/v2/GetMeeting/<string:user_id>")
+# schedule meeting endpoints
+api.add_resource(GetEventViewDetails, "/api/v2/GetEventViewDetails/<string:view_id>")
+api.add_resource(GetAvailableAppointments, "/api/v2/GetAvailableAppointments/<string:view_id>/<string:day_selected>")
+api.add_resource(GetWeekAvailableAppointments, "/api/v2/GetWeekAvailableAppointments/<string:view_id>")
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 if __name__ == "__main__":
