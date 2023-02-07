@@ -2345,7 +2345,7 @@ class GetWeekAvailableAppointments(Resource):
                     FROM (
                         SELECT 
                             ROW_NUMBER() OVER() AS row_num, meeting_day, day_index,
-                            DATE_FORMAT(CURDATE() + IF(WEEKDAY(CURDATE()) = 0, day_index , day_index + 7 - WEEKDAY(CURDATE())), '%Y-%m-%d') AS next_date,
+                            DATE_FORMAT(CURDATE() + IF(day_index > WEEKDAY(CURDATE()), day_index - WEEKDAY(CURDATE()) , day_index + 7 - WEEKDAY(CURDATE())), '%Y-%m-%d') AS next_date,
                             SUBSTRING_INDEX(begin_datetime,' ',-1) AS begin_time,
                             SUBSTRING_INDEX(end_datetime,' ',-1) AS end_time
                         FROM skedul.wk_time_slots
