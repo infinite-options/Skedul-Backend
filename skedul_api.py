@@ -2334,7 +2334,14 @@ class GetWeekAvailableAppointments(Resource):
 
             # WHERE event_unique_id = \'""" + view_id + """\'
             query = ("""
-                    SELECT ats.*, meetings.Actual_Start, meetings.Actual_end, available.start_time, available.finish_time
+                    SELECT event_unique_id, view_id, user_id, event_name, location, duration, before_time, before_enabled, after_time, after_enabled, view_name, color, -- rn, Weekday, available_times, a, start_hhmm, finish_hhmm, start_time, finish_time, row_num, meeting_day, day_index, begin_time, end_time, Actual_Start, Actual_End, availability
+                            meeting_day, if(avail2.start_time = 'Not Available','[]',JSON_ARRAYAGG(availability)) AS availtime
+                    FROM (
+                    SELECT available.*, ats.*, -- available.start_time, available.finish_time,
+                        meetings.Actual_Start, meetings.Actual_end,
+                            json_object(
+                            'start_time',begin_time
+                            ,'end_time',end_time) AS availability
                     FROM (
                         SELECT 
                             ROW_NUMBER() OVER() AS row_num, meeting_day, day_index,
@@ -2342,6 +2349,26 @@ class GetWeekAvailableAppointments(Resource):
                             SUBSTRING_INDEX(end_datetime,' ',-1) AS end_time
                         FROM skedul.wk_time_slots
                         ) as ats
+                    -- LEFT JOIN WITH AVAILABLE TIMES
+                    LEFT JOIN (
+                        SELECT *, IF(ISNULL(start_hhmm),"Not Available",CONCAT(start_hhmm,":00")) AS start_time, IF(ISNULL(finish_hhmm),"Not Available",CONCAT(finish_hhmm,":00")) AS finish_time
+                        FROM skedul.new_view3,
+                        JSON_TABLE(new_view3.available_times, 
+                            '$'  -- THIS RETURNS THE BLANK ROWS
+                            COLUMNS (
+                                a FOR ORDINALITY,
+                                NESTED PATH '$[*]'
+                                COLUMNS (
+                                start_hhmm VARCHAR(40)  PATH '$.start_time',
+                                finish_hhmm VARCHAR(40)  PATH '$.end_time')
+                                )
+                            ) AS r
+                        WHERE event_unique_id = \'""" + view_id + """\'
+                    ) AS available
+                    ON IF(available.start_time = 'Not Available', ats.meeting_day = available.Weekday, ats.meeting_day = available.Weekday AND (
+                        (CAST(ats.begin_time AS TIME) >= CAST(available.start_time AS TIME) AND CAST(ats.end_time AS TIME) <= CAST(available.finish_time AS TIME)) OR
+                        (CAST(ats.begin_time AS TIME) <= CAST(available.start_time AS TIME) AND CAST(ats.end_time AS TIME) > CAST(available.start_time AS TIME)) OR
+                        (CAST(ats.begin_time AS TIME) < CAST(available.finish_time AS TIME) AND CAST(ats.end_time AS TIME) >= CAST(available.finish_time AS TIME))))
                     -- LEFT JOIN WITH EXISTING MEETINGS
                     LEFT JOIN (SELECT *,
                         IF (before_enabled = true,SUBTIME(meetTime, before_time),meetTime) Actual_Start,
@@ -2360,7 +2387,7 @@ class GetWeekAvailableAppointments(Resource):
                             FROM skedul.meetings
                             WHERE user_id =  (SELECT DISTINCT user_id 
                                             FROM skedul.meetings
-                                            WHERE event_id = \'""" + view_id + """\') 
+                                            WHERE event_id= \'""" + view_id + """\') 
                             AND meetDate >= CURDATE() AND meetDate < ADDDATE(CURDATE(),7)
                             ) AS m
                         LEFT JOIN skedul.event_types
@@ -2371,23 +2398,9 @@ class GetWeekAvailableAppointments(Resource):
                         (ats.begin_time >= meetings.Actual_Start AND ats.end_time <=meetings.Actual_End) OR
                         (ats.begin_time <= meetings.Actual_Start AND ats.end_time > meetings.Actual_Start) OR
                         (ats.begin_time <= meetings.Actual_End AND ats.end_time > meetings.Actual_End) )
-                    -- LEFT JOIN WITH AVAILABLE TIMES
-                    LEFT JOIN (
-                        SELECT *, CONCAT(start_hhmm,":00") AS start_time, CONCAT(finish_hhmm,":00") AS finish_time
-                        FROM skedul.new_view3,
-                        JSON_TABLE(new_view3.available_times, '$[*]'
-                                COLUMNS (
-                                        a FOR ORDINALITY,
-                                        start_hhmm VARCHAR(40)  PATH '$.start_time',
-                                        finish_hhmm VARCHAR(40)  PATH '$.end_time')
-                            ) AS r
-                        WHERE event_unique_id = \'""" + view_id + """\'
-                    ) AS available
-                    ON ats.meeting_day = available.Weekday AND (
-                        (CAST(ats.begin_time AS TIME) >= CAST(available.start_time AS TIME) AND CAST(ats.end_time AS TIME) <= CAST(available.finish_time AS TIME)) OR
-                        (CAST(ats.begin_time AS TIME) <= CAST(available.start_time AS TIME) AND CAST(ats.end_time AS TIME) > CAST(available.start_time AS TIME)) OR
-                        (CAST(ats.begin_time AS TIME) < CAST(available.finish_time AS TIME) AND CAST(ats.end_time AS TIME) >= CAST(available.finish_time AS TIME)))
-                    WHERE ISNULL(meetings.Actual_Start) AND available.start_time IS NOT NULL;
+
+                    WHERE ISNULL(meetings.Actual_Start) AND available.start_time IS NOT NULL) as avail2
+                    GROUP BY meeting_day
                     """)
 
 
