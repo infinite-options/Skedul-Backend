@@ -264,10 +264,10 @@ def execute(sql, cmd, conn, skipSerialization=False):
     response = {}
     try:
         with conn.cursor() as cur:
-            print("Before Execute")
+            # print("Before Execute")
             cur.execute(sql)
-            print("After Execute")
-            if cmd is "get":
+            # print("After Execute")
+            if cmd == "get":
                 result = cur.fetchall()
                 response["message"] = "Successfully executed SQL query."
                 # Return status code of 280 for successful GET request
@@ -275,7 +275,7 @@ def execute(sql, cmd, conn, skipSerialization=False):
                 if not skipSerialization:
                     result = serializeResponse(result)
                 response["result"] = result
-            elif cmd in "post":
+            elif cmd == "post":
                 conn.commit()
                 response["message"] = "Successfully committed SQL command."
                 # Return status code of 281 for successful POST request
@@ -2334,6 +2334,11 @@ class GetWeekAvailableAppointments(Resource):
 
             # WHERE event_unique_id = \'""" + view_id + """\'
             query = ("""
+                    
+                    SELECT event_unique_id, view_id, user_id, event_name, location, duration, before_time, before_enabled, after_time, after_enabled, view_name, color, next_date,
+                        JSON_OBJECTAGG(meeting_day, availtime) AS schedule
+                    FROM (
+
                     SELECT event_unique_id, view_id, user_id, event_name, location, duration, before_time, before_enabled, after_time, after_enabled, view_name, color, -- rn, Weekday, available_times, a, start_hhmm, finish_hhmm, start_time, finish_time, row_num, meeting_day, day_index, begin_time, end_time, Actual_Start, Actual_End, availability
                             meeting_day, next_date, if(avail2.start_time = 'Not Available','[]',JSON_ARRAYAGG(availability)) AS availtime
                     FROM (
@@ -2401,7 +2406,8 @@ class GetWeekAvailableAppointments(Resource):
                         (ats.begin_time <= meetings.Actual_End AND ats.end_time > meetings.Actual_End) )
 
                     WHERE ISNULL(meetings.Actual_Start) AND available.start_time IS NOT NULL) as avail2
-                    GROUP BY meeting_day
+                    GROUP BY meeting_day) AS avail3;
+
                     """)
 
 
