@@ -2334,9 +2334,8 @@ class GetWeekAvailableAppointments(Resource):
 
             # WHERE event_unique_id = \'""" + view_id + """\'
             query = ("""
-                    
-                    SELECT event_unique_id, view_id, user_id, event_name, location, duration, before_time, before_enabled, after_time, after_enabled, view_name, color, next_date,
-                        JSON_OBJECTAGG(meeting_day, availtime) AS schedule
+                    SELECT event_unique_id, view_id, user_id, event_name, location, duration, before_time, before_enabled, after_time, after_enabled, view_name, color,
+                        JSON_OBJECTAGG(CONCAT(meeting_day, " ", next_date), availtime) AS schedule
                     FROM (
 
                     SELECT event_unique_id, view_id, user_id, event_name, location, duration, before_time, before_enabled, after_time, after_enabled, view_name, color, -- rn, Weekday, available_times, a, start_hhmm, finish_hhmm, start_time, finish_time, row_num, meeting_day, day_index, begin_time, end_time, Actual_Start, Actual_End, availability
@@ -2369,7 +2368,7 @@ class GetWeekAvailableAppointments(Resource):
                                 finish_hhmm VARCHAR(40)  PATH '$.end_time')
                                 )
                             ) AS r
-                        WHERE event_unique_id = '400-000004'
+                        WHERE event_unique_id = \'""" + view_id + """\'
                     ) AS available
                     ON IF(available.start_time = 'Not Available', ats.meeting_day = available.Weekday, ats.meeting_day = available.Weekday AND (
                         (CAST(ats.begin_time AS TIME) >= CAST(available.start_time AS TIME) AND CAST(ats.end_time AS TIME) <= CAST(available.finish_time AS TIME)) OR
@@ -2393,7 +2392,7 @@ class GetWeekAvailableAppointments(Resource):
                             FROM skedul.meetings
                             WHERE user_id =  (SELECT DISTINCT user_id 
                                             FROM skedul.meetings
-                                            WHERE event_id = '400-000004') 
+                                            WHERE event_id = \'""" + view_id + """\') 
                             AND meetDate >= CURDATE() AND meetDate < ADDDATE(CURDATE(),7)
                             ) AS m
                         LEFT JOIN skedul.event_types
@@ -2407,7 +2406,6 @@ class GetWeekAvailableAppointments(Resource):
 
                     WHERE ISNULL(meetings.Actual_Start) AND available.start_time IS NOT NULL) as avail2
                     GROUP BY meeting_day) AS avail3;
-
                     """)
 
 
