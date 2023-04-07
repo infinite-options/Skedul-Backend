@@ -1605,20 +1605,41 @@ class UpdateView(Resource):
             conn = connect()
             print("Before Data")
             data = request.get_json(force=True)
-            schedule = data["schedule"]
-            print("Data Received")
+            type = data["updateType"]
+            query = ()
+            if type == "view":
+                name = data["name"]
+                color = data["color"]
+                print("Data Received")
 
-            query = (
-                """
-                    UPDATE skedul.views
-                    SET schedule= \'"""
-                + json.dumps(schedule, sort_keys=False)
-                + """\'
-                        WHERE view_unique_id = \'"""
-                + view_id
-                + """\';
+                query = (
                     """
-            )
+                        UPDATE skedul.views
+                        SET view_name= \'"""
+                    + str(name).replace("'", "''")
+                    + """\',
+                        color = \'"""
+                    + str(color)
+                    + """\'
+                            WHERE view_unique_id = \'"""
+                    + view_id
+                    + """\';
+                        """
+                )
+            else:
+                schedule = data["schedule"]
+                print("Data Received")
+                query = (
+                    """
+                        UPDATE skedul.views
+                        SET schedule= \'"""
+                    + json.dumps(schedule, sort_keys=False)
+                    + """\'
+                            WHERE view_unique_id = \'"""
+                    + view_id
+                    + """\';
+                        """
+                )
             print(query)
             items = execute(query, "post", conn)
             print(items)
@@ -2003,7 +2024,7 @@ class AvailableAppointments(Resource):
                             ON ats.row_num + """ + str(k) + """ = ats1.row_num_hr
                           ) AS atss) AS atsss
                     WHERE '""" + duration + """' <= available_duration; """)
-                print('Query ',k,": ",query)
+                print('Query ', k, ": ", query)
                 available_times = execute(query, "get", conn)
                 atimes['result'] = atimes['result'] + \
                     (available_times['result'])
@@ -2227,10 +2248,10 @@ class GetEventViewDetails(Resource):
 
             return response, 200
         except:
-            raise BadRequest("GetEventViewDetails Request failed, please try again later.")
+            raise BadRequest(
+                "GetEventViewDetails Request failed, please try again later.")
         finally:
             disconnect(conn)
-
 
 
 class GetAvailableAppointments(Resource):
@@ -2318,7 +2339,8 @@ class GetAvailableAppointments(Resource):
 
             return response, 200
         except:
-            raise BadRequest("GetAvailableAppointments Request failed, please try again later.")
+            raise BadRequest(
+                "GetAvailableAppointments Request failed, please try again later.")
         finally:
             disconnect(conn)
 
@@ -2408,11 +2430,9 @@ class GetWeekAvailableAppointments(Resource):
                     GROUP BY meeting_day) AS avail3;
                     """)
 
-
             # print(query)
             items = execute(query, "get", conn)
             # print(items)
-            
 
             response["message"] = "successful"
             response["result"] = items["result"]
@@ -2424,9 +2444,7 @@ class GetWeekAvailableAppointments(Resource):
             disconnect(conn)
 
 
-
 # -- DEFINE APIS -------------------------------------------------------------------------------
-
 api.add_resource(
     GoogleCalenderEvents,
     "/api/v2/calenderEvents/<string:user_unique_id>,<string:start>,<string:end>",
@@ -2466,13 +2484,17 @@ api.add_resource(GetEvent, "/api/v2/GetEvent/<string:event_id>")
 api.add_resource(SendEmail, "/api/v2/sendEmail/<string:email>")
 # schedule endpoints
 api.add_resource(GetSchedule, "/api/v2/GetSchedule/<string:user_id>")
-api.add_resource(AvailableAppointments, "/api/v2/AvailableAppointments/<string:date_value>/<string:duration>/<string:start_time>,<string:end_time>")
+api.add_resource(AvailableAppointments,
+                 "/api/v2/AvailableAppointments/<string:date_value>/<string:duration>/<string:start_time>,<string:end_time>")
 api.add_resource(AddMeeting, "/api/v2/AddMeeting")
 api.add_resource(GetMeeting, "/api/v2/GetMeeting/<string:user_id>")
 # schedule meeting endpoints
-api.add_resource(GetEventViewDetails, "/api/v2/GetEventViewDetails/<string:view_id>")
-api.add_resource(GetAvailableAppointments, "/api/v2/GetAvailableAppointments/<string:view_id>/<string:day_selected>")
-api.add_resource(GetWeekAvailableAppointments, "/api/v2/GetWeekAvailableAppointments/<string:view_id>")
+api.add_resource(GetEventViewDetails,
+                 "/api/v2/GetEventViewDetails/<string:view_id>")
+api.add_resource(GetAvailableAppointments,
+                 "/api/v2/GetAvailableAppointments/<string:view_id>/<string:day_selected>")
+api.add_resource(GetWeekAvailableAppointments,
+                 "/api/v2/GetWeekAvailableAppointments/<string:view_id>")
 # Run on below IP address and port
 # Make sure port number is unused (i.e. don't use numbers 0-1023)
 if __name__ == "__main__":
