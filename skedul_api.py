@@ -147,18 +147,20 @@ api = Api(app)
 utc = pytz.utc
 
 # # These statment return Day and Time in GMT
-# def getToday(): return datetime.strftime(datetime.now(utc), "%Y-%m-%d")
-# def getNow(): return datetime.strftime(datetime.now(utc), "%Y-%m-%d %H:%M:%S")
+def getToday(): 
+    return datetime.strftime(datetime.now(utc), "%Y-%m-%d")
+def getNow(): 
+    return datetime.strftime(datetime.now(utc), "%Y-%m-%d %H:%M:%S")
 
 # # These statment return Day and Time in Local Time - Not sure about PST vs PDT
 
 
-def getToday():
-    return datetime.strftime(datetime.now(), "%Y-%m-%d")
+# def getToday():
+#     return datetime.strftime(datetime.now(), "%Y-%m-%d")
 
 
-def getNow():
-    return datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
+# def getNow():
+#     return datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
 
 
 # Not sure what these statments do
@@ -758,6 +760,7 @@ class UserDetails(Resource):
                                 , user_last_name
                                 , google_auth_token
                                 , google_refresh_token
+                                , time_zone
                         FROM
                         users WHERE user_unique_id = \'"""
                 + user_id
@@ -775,6 +778,7 @@ class UserDetails(Resource):
             response["google_refresh_token"] = items["result"][0][
                 "google_refresh_token"
             ]
+            response["user_time_zone"] = items["result"][0]["time_zone"]
 
             return response, 200
         except:
