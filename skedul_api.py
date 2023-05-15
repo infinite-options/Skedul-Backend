@@ -56,8 +56,9 @@ from bs4 import BeautifulSoup
 from twilio.rest import Client
 
 from dateutil.relativedelta import *
+from dateutil import tz
 from decimal import Decimal
-from datetime import datetime, date, timedelta
+# from datetime import datetime, date, timedelta
 from hashlib import sha512
 from math import ceil
 import string
@@ -147,8 +148,8 @@ api = Api(app)
 utc = pytz.utc
 
 # # These statment return Day and Time in GMT
-# def getToday(): return datetime.strftime(datetime.now(utc), "%Y-%m-%d")
-# def getNow(): return datetime.strftime(datetime.now(utc), "%Y-%m-%d %H:%M:%S")
+def getTodayUTC(): return datetime.strftime(datetime.now(utc), "%Y-%m-%d")
+def getNowUTC(): return datetime.strftime(datetime.now(utc), "%Y-%m-%d %H:%M:%S")
 
 # # These statment return Day and Time in Local Time - Not sure about PST vs PDT
 
@@ -1685,6 +1686,63 @@ class GetAllViews(Resource):
             print(query)
             items = execute(query, "get", conn)
 
+            query = (
+                """SELECT time_zone
+                FROM skedul.users
+                        WHERE user_unique_id = \'"""
+                + user_id
+                + """\';"""
+             )
+            timeZoneResult = execute(query, "get", conn)
+            user_timezone = timeZoneResult['result'][0]['time_zone']
+            if user_timezone == '' :
+                user_timezone = 'America/Los_Angeles'
+            # print("user_timezone",user_timezone)
+            weekDatesResult = weekDates()
+            # print("weekDates",weekDatesResult)
+
+            for i in items["result"]:
+                utc_schedule = json.loads(i["schedule"])
+                scheduleArray = {}
+                # print("utc schedule ", utc_schedule)
+                for day in utc_schedule:
+                    print(day)
+                    if day not in scheduleArray:
+                        scheduleArray[day] = []
+                    if len(utc_schedule[day]) != 0 and utc_schedule[day][0]['start_time'] != '' and utc_schedule[day][0]['end_time'] != '':
+                        corresponding_date = weekDatesResult[day]
+                        dateTimeStringStart = corresponding_date + " " + utc_schedule[day][0]['start_time'] + ":00 " + day
+                        local_startDateTime = convertToLocalTZ(user_timezone, dateTimeStringStart)
+                        local_startTime = local_startDateTime.strftime("%H:%M")
+                        local_startDay = local_startDateTime.strftime("%A")
+                        print("local_startDateTime ", local_startDateTime)
+                        print("local_startTime ", local_startTime)
+                        print("local_startDay ", local_startDay)
+
+                        dateTimeStringEnd = corresponding_date + " " + utc_schedule[day][0]['end_time'] + ":00 " + day
+                        local_endDateTime = convertToLocalTZ(user_timezone,dateTimeStringEnd)
+                        local_endTime = local_endDateTime.strftime("%H:%M")
+                        local_endDay = local_endDateTime.strftime("%A")
+                        print("local_endDateTime ", local_endDateTime)
+                        print("local_endTime ", local_endTime)
+                        print("local_endDay ", local_endDay)
+                        print(" check ", local_startDateTime.date() == local_endDateTime.date())
+
+                        if local_startDateTime.date() != local_endDateTime.date():
+                            localSchedule = {'start_time' : local_startTime, 'end_time' : "23:59"}
+                            scheduleArray[local_startDay] = [localSchedule]
+                            localSchedule = {'start_time' : "00:00", 'end_time' : local_endTime}
+                            scheduleArray[local_endDay].append(localSchedule)
+                        else:
+                            localSchedule = {'start_time' : local_startTime, 'end_time' : local_endTime}
+                            scheduleArray[local_startDay].append(localSchedule)
+                        print("**** scheduleArray", scheduleArray)
+                print("scheduleArray", scheduleArray)
+                print("sched ", i)
+                scheduleStr = json.dumps(scheduleArray)
+                i.update({'schedule':scheduleStr})
+                print("sched2 ", i)
+
             response["message"] = "successful"
             response["result"] = items
 
@@ -1728,6 +1786,35 @@ class GetView(Resource):
 
 # -- SCHEDULE PAGE -----------
 
+def weekDates() :
+    try :
+        today = datetime.utcnow()
+        # print("today utc",today)
+        result = {}
+        for x in range(7):
+            d = today + timedelta(days=x)
+            date = d.strftime("%Y-%m-%d")
+            dayOfWeek = d.strftime('%A')
+            result[dayOfWeek] = date
+            # print(date, dayOfWeek)
+        # print(result)
+        return result
+    except Exception as e: 
+        print(e)
+
+def convertToLocalTZ(user_timezone, dateTimeString) :
+    try :
+        print("dateTimeString ", dateTimeString)
+        from_zone = tz.gettz('UTC')
+        to_zone = tz.gettz(user_timezone)
+        # print("from_zone ", from_zone, " to_zone ", to_zone)
+        utc_date = datetime.strptime(dateTimeString, '%Y-%m-%d %H:%M:%S %A')
+        utc_date = utc_date.replace(tzinfo=from_zone)
+        local_date = utc_date.astimezone(to_zone)
+        print("utc_date",utc_date, " ** local_date ", local_date)
+        return local_date
+    except Exception as e: 
+        print(e)
 
 class GetSchedule(Resource):
     def get(self, user_id):
@@ -1749,6 +1836,63 @@ class GetSchedule(Resource):
                 + """\';"""
             )
             items = execute(query, "get", conn)
+
+            query = (
+                """SELECT time_zone
+                FROM skedul.users
+                        WHERE user_unique_id = \'"""
+                + user_id
+                + """\';"""
+             )
+            timeZoneResult = execute(query, "get", conn)
+            user_timezone = timeZoneResult['result'][0]['time_zone']
+            if user_timezone == '' :
+                user_timezone = 'America/Los_Angeles'
+            # print("user_timezone",user_timezone)
+            weekDatesResult = weekDates()
+            # print("weekDates",weekDatesResult)
+
+            for i in items["result"]:
+                utc_schedule = json.loads(i["schedule"])
+                scheduleArray = {}
+                # print("utc schedule ", utc_schedule)
+                for day in utc_schedule:
+                    print(day)
+                    if day not in scheduleArray:
+                        scheduleArray[day] = []
+                    if len(utc_schedule[day]) != 0:
+                        corresponding_date = weekDatesResult[day]
+                        dateTimeStringStart = corresponding_date + " " + utc_schedule[day][0]['start_time'] + ":00 " + day
+                        local_startDateTime = convertToLocalTZ(user_timezone, dateTimeStringStart)
+                        local_startTime = local_startDateTime.strftime("%H:%M")
+                        local_startDay = local_startDateTime.strftime("%A")
+                        print("local_startDateTime ", local_startDateTime)
+                        print("local_startTime ", local_startTime)
+                        print("local_startDay ", local_startDay)
+
+                        dateTimeStringEnd = corresponding_date + " " + utc_schedule[day][0]['end_time'] + ":00 " + day
+                        local_endDateTime = convertToLocalTZ(user_timezone,dateTimeStringEnd)
+                        local_endTime = local_endDateTime.strftime("%H:%M")
+                        local_endDay = local_endDateTime.strftime("%A")
+                        print("local_endDateTime ", local_endDateTime)
+                        print("local_endTime ", local_endTime)
+                        print("local_endDay ", local_endDay)
+                        print(" check ", local_startDateTime.date() == local_endDateTime.date())
+
+                        if local_startDateTime.date() != local_endDateTime.date():
+                            localSchedule = {'start_time' : local_startTime, 'end_time' : "23:59"}
+                            scheduleArray[local_startDay].append(localSchedule)
+                            localSchedule = {'start_time' : "00:00", 'end_time' : local_endTime}
+                            scheduleArray[local_endDay].append(localSchedule)
+                        else:
+                            localSchedule = {'start_time' : local_startTime, 'end_time' : local_endTime}
+                            scheduleArray[local_startDay].append(localSchedule)
+                print("scheduleArray", scheduleArray)
+                print("sched ", i)
+                scheduleStr = json.dumps(scheduleArray)
+                i.update({'schedule':scheduleStr})
+                print("sched2 ", i)
+
             sunday = []
             monday = []
             tuesday = []
@@ -1759,6 +1903,7 @@ class GetSchedule(Resource):
 
             for i in items["result"]:
                 schedule = json.loads(i["schedule"])
+                print("user_schedule ", schedule)
                 for s in schedule["Sunday"]:
                     print("s", s)
                     if s["start_time"] != "":
@@ -1856,6 +2001,134 @@ class GetSchedule(Resource):
             raise BadRequest("Request failed, please try again later.")
         finally:
             disconnect(conn)
+# class GetSchedule(Resource):
+#     def get(self, user_id):
+#         print("In GetSchedule")
+#         response = {}
+#         items = {}
+
+#         try:
+#             conn = connect()
+
+#             query = (
+#                 """SELECT view_unique_id
+#                             , view_name
+#                             , (schedule)
+#                             , color
+#                         FROM skedul.views
+#                         WHERE user_id = \'"""
+#                 + user_id
+#                 + """\';"""
+#             )
+#             items = execute(query, "get", conn)
+#             sunday = []
+#             monday = []
+#             tuesday = []
+#             wednesday = []
+#             thursday = []
+#             friday = []
+#             saturday = []
+
+#             for i in items["result"]:
+#                 schedule = json.loads(i["schedule"])
+#                 print("user_schedule ", schedule)
+#                 for s in schedule["Sunday"]:
+#                     print("s", s)
+#                     if s["start_time"] != "":
+#                         sun = {
+#                             "id": i["view_unique_id"],
+#                             "name": i["view_name"],
+#                             "schedule": s,
+#                             "color": i["color"],
+#                         }
+#                         sunday.append(sun)
+#                         print("sunday", sunday)
+#                 for s in schedule["Monday"]:
+#                     print("s", s)
+#                     if s["start_time"] != "":
+#                         mon = {
+#                             "id": i["view_unique_id"],
+#                             "name": i["view_name"],
+#                             "schedule": s,
+#                             "color": i["color"],
+#                         }
+#                         monday.append(mon)
+#                         print("monday", monday)
+#                 for s in schedule["Tuesday"]:
+#                     print("s", s)
+#                     if s["start_time"] != "":
+#                         tues = {
+#                             "id": i["view_unique_id"],
+#                             "name": i["view_name"],
+#                             "schedule": s,
+#                             "color": i["color"],
+#                         }
+#                         tuesday.append(tues)
+#                         print("tuesday", tuesday)
+#                 for s in schedule["Wednesday"]:
+#                     print("s", s)
+#                     if s["start_time"] != "":
+#                         wed = {
+#                             "id": i["view_unique_id"],
+#                             "name": i["view_name"],
+#                             "schedule": s,
+#                             "color": i["color"],
+#                         }
+#                         wednesday.append(wed)
+#                         print("wednesday", wednesday)
+#                 for s in schedule["Thursday"]:
+#                     print("s", s)
+#                     if s["start_time"] != "":
+#                         thurs = {
+#                             "id": i["view_unique_id"],
+#                             "name": i["view_name"],
+#                             "schedule": s,
+#                             "color": i["color"],
+#                         }
+#                         thursday.append(thurs)
+#                         print("thursday", thursday)
+#                 for s in schedule["Friday"]:
+#                     print("s", s)
+#                     if s["start_time"] != "":
+#                         fri = {
+#                             "id": i["view_unique_id"],
+#                             "name": i["view_name"],
+#                             "schedule": s,
+#                             "color": i["color"],
+#                         }
+#                         friday.append(fri)
+#                         print("friday", friday)
+#                 for s in schedule["Saturday"]:
+#                     print("s", s)
+#                     if s["start_time"] != "":
+#                         sat = {
+#                             "id": i["view_unique_id"],
+#                             "name": i["view_name"],
+#                             "schedule": s,
+#                             "color": i["color"],
+#                         }
+#                         saturday.append(sat)
+#                         print("saturday", saturday)
+
+#                 item = {
+#                     "sunday": sunday,
+#                     "monday": monday,
+#                     "tuesday": tuesday,
+#                     "wednesday": wednesday,
+#                     "thursday": thursday,
+#                     "friday": friday,
+#                     "saturday": saturday,
+#                 }
+#                 print(item)
+
+#             response["message"] = "successful"
+#             response["result"] = item
+
+#             return response, 200
+#         except:
+#             raise BadRequest("Request failed, please try again later.")
+#         finally:
+#             disconnect(conn)
 
 
 class AvailableAppointments(Resource):
