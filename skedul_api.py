@@ -1685,7 +1685,7 @@ class GetAllViews(Resource):
             )
             print(query)
             items = execute(query, "get", conn)
-
+            # print(items)
             query = (
                 """SELECT time_zone
                 FROM skedul.users
@@ -1706,7 +1706,7 @@ class GetAllViews(Resource):
                 scheduleArray = {}
                 # print("utc schedule ", utc_schedule)
                 for day in utc_schedule:
-                    print(day)
+                    # print(day)
                     if day not in scheduleArray:
                         scheduleArray[day] = []
                     if len(utc_schedule[day]) != 0 and utc_schedule[day][0]['start_time'] != '' and utc_schedule[day][0]['end_time'] != '':
@@ -1726,19 +1726,30 @@ class GetAllViews(Resource):
                         print("local_endDateTime ", local_endDateTime)
                         print("local_endTime ", local_endTime)
                         print("local_endDay ", local_endDay)
-                        print(" check ", local_startDateTime.date() == local_endDateTime.date())
+                        checkSameDate = local_startDateTime.date() == local_endDateTime.date()
+                        # print(" check ", local_startDateTime.date() == local_endDateTime.date())
 
-                        if local_startDateTime.date() != local_endDateTime.date():
+                        if checkSameDate == False:
                             localSchedule = {'start_time' : local_startTime, 'end_time' : "23:59"}
                             scheduleArray[local_startDay] = [localSchedule]
                             localSchedule = {'start_time' : "00:00", 'end_time' : local_endTime}
-                            scheduleArray[local_endDay].append(localSchedule)
+                            if local_endDay not in scheduleArray:
+                                scheduleArray[local_endDay]=[localSchedule]
+                            else:
+                                scheduleArray[local_endDay].append(localSchedule)
                         else:
+                            # print("checkSameDate ",checkSameDate)
                             localSchedule = {'start_time' : local_startTime, 'end_time' : local_endTime}
-                            scheduleArray[local_startDay].append(localSchedule)
-                        print("**** scheduleArray", scheduleArray)
-                print("scheduleArray", scheduleArray)
-                print("sched ", i)
+                            # print("localSchedule ",localSchedule, " 88 ",local_startDay)
+                            # print("scheduleArray ===== ",scheduleArray)
+                            if local_startDay not in scheduleArray:
+                                scheduleArray[local_startDay]=[localSchedule]
+                            else:
+                                scheduleArray[local_startDay].append(localSchedule)
+                        #     print("scheduleArray ",scheduleArray[local_startDay])
+                        # print("**** scheduleArray", scheduleArray)
+                # print("scheduleArray", scheduleArray)
+                # print("sched ", i)
                 scheduleStr = json.dumps(scheduleArray)
                 i.update({'schedule':scheduleStr})
                 print("sched2 ", i)
@@ -1891,7 +1902,7 @@ class GetSchedule(Resource):
                 print("sched ", i)
                 scheduleStr = json.dumps(scheduleArray)
                 i.update({'schedule':scheduleStr})
-                print("sched2 ", i)
+                print("sched2 scheduleAPI ", i)
 
             sunday = []
             monday = []
