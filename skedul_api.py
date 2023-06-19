@@ -151,15 +151,12 @@ utc = pytz.utc
 def getTodayUTC(): return datetime.strftime(datetime.now(utc), "%Y-%m-%d")
 def getNowUTC(): return datetime.strftime(datetime.now(utc), "%Y-%m-%d %H:%M:%S")
 
-# # These statment return Day and Time in Local Time - Not sure about PST vs PDT
+# These statment return Day and Time in Local Time - Not sure about PST vs PDT
+def getToday():
+    return datetime.strftime(datetime.now(), "%Y-%m-%d")
 
-
-# def getToday():
-#     return datetime.strftime(datetime.now(), "%Y-%m-%d")
-
-
-# def getNow():
-#     return datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
+def getNow():
+    return datetime.strftime(datetime.now(), "%Y-%m-%d %H:%M:%S")
 
 
 # Not sure what these statments do
