@@ -84,7 +84,8 @@ RDS_PORT = 3306
 RDS_USER = "admin"
 RDS_DB = "skedul"
 
-SCOPES = "https://www.googleapis.com/auth/calendar"
+# SCOPES = "https://www.googleapis.com/auth/calendar"
+SCOPES = "https://www.googleapis.com/auth/calendar.events"
 CLIENT_SECRET_FILE = "credentials.json"
 APPLICATION_NAME = "skedul"
 # app = Flask(__name__)
