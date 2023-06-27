@@ -1730,45 +1730,47 @@ class GetAllViews(Resource):
                     # print(day)
                     if day not in scheduleArray:
                         scheduleArray[day] = []
-                    if len(utc_schedule[day]) != 0 and utc_schedule[day][0]['start_time'] != '' and utc_schedule[day][0]['end_time'] != '':
-                        corresponding_date = weekDatesResult[day]
-                        dateTimeStringStart = corresponding_date + " " + utc_schedule[day][0]['start_time'] + ":00 " + day
-                        local_startDateTime = convertToLocalTZ(user_timezone, dateTimeStringStart)
-                        local_startTime = local_startDateTime.strftime("%H:%M")
-                        local_startDay = local_startDateTime.strftime("%A")
-                        print("local_startDateTime ", local_startDateTime)
-                        print("local_startTime ", local_startTime)
-                        print("local_startDay ", local_startDay)
+                    if len(utc_schedule[day]) != 0:
+                        for idx, element in enumerate(utc_schedule[day]):
+                            if utc_schedule[day][idx]['start_time'] != '' and utc_schedule[day][idx]['end_time'] != '':
+                                corresponding_date = weekDatesResult[day]
+                                dateTimeStringStart = corresponding_date + " " + utc_schedule[day][idx]['start_time'] + ":00 " + day
+                                local_startDateTime = convertToLocalTZ(user_timezone, dateTimeStringStart)
+                                local_startTime = local_startDateTime.strftime("%H:%M")
+                                local_startDay = local_startDateTime.strftime("%A")
+                                print("local_startDateTime ", local_startDateTime)
+                                print("local_startTime ", local_startTime)
+                                print("local_startDay ", local_startDay)
 
-                        dateTimeStringEnd = corresponding_date + " " + utc_schedule[day][0]['end_time'] + ":00 " + day
-                        local_endDateTime = convertToLocalTZ(user_timezone,dateTimeStringEnd)
-                        local_endTime = local_endDateTime.strftime("%H:%M")
-                        local_endDay = local_endDateTime.strftime("%A")
-                        print("local_endDateTime ", local_endDateTime)
-                        print("local_endTime ", local_endTime)
-                        print("local_endDay ", local_endDay)
-                        checkSameDate = local_startDateTime.date() == local_endDateTime.date()
-                        # print(" check ", local_startDateTime.date() == local_endDateTime.date())
+                                dateTimeStringEnd = corresponding_date + " " + utc_schedule[day][idx]['end_time'] + ":00 " + day
+                                local_endDateTime = convertToLocalTZ(user_timezone,dateTimeStringEnd)
+                                local_endTime = local_endDateTime.strftime("%H:%M")
+                                local_endDay = local_endDateTime.strftime("%A")
+                                print("local_endDateTime ", local_endDateTime)
+                                print("local_endTime ", local_endTime)
+                                print("local_endDay ", local_endDay)
+                                checkSameDate = local_startDateTime.date() == local_endDateTime.date()
+                                # print(" check ", local_startDateTime.date() == local_endDateTime.date())
 
-                        if checkSameDate == False:
-                            localSchedule = {'start_time' : local_startTime, 'end_time' : "23:59"}
-                            scheduleArray[local_startDay] = [localSchedule]
-                            localSchedule = {'start_time' : "00:00", 'end_time' : local_endTime}
-                            if local_endDay not in scheduleArray:
-                                scheduleArray[local_endDay]=[localSchedule]
-                            else:
-                                scheduleArray[local_endDay].append(localSchedule)
-                        else:
-                            # print("checkSameDate ",checkSameDate)
-                            localSchedule = {'start_time' : local_startTime, 'end_time' : local_endTime}
-                            # print("localSchedule ",localSchedule, " 88 ",local_startDay)
-                            # print("scheduleArray ===== ",scheduleArray)
-                            if local_startDay not in scheduleArray:
-                                scheduleArray[local_startDay]=[localSchedule]
-                            else:
-                                scheduleArray[local_startDay].append(localSchedule)
-                        #     print("scheduleArray ",scheduleArray[local_startDay])
-                        # print("**** scheduleArray", scheduleArray)
+                                if checkSameDate == False:
+                                    localSchedule = {'start_time' : local_startTime, 'end_time' : "23:59"}
+                                    scheduleArray[local_startDay] = [localSchedule]
+                                    localSchedule = {'start_time' : "00:00", 'end_time' : local_endTime}
+                                    if local_endDay not in scheduleArray:
+                                        scheduleArray[local_endDay]=[localSchedule]
+                                    else:
+                                        scheduleArray[local_endDay].append(localSchedule)
+                                else:
+                                    # print("checkSameDate ",checkSameDate)
+                                    localSchedule = {'start_time' : local_startTime, 'end_time' : local_endTime}
+                                    # print("localSchedule ",localSchedule, " 88 ",local_startDay)
+                                    # print("scheduleArray ===== ",scheduleArray)
+                                    if local_startDay not in scheduleArray:
+                                        scheduleArray[local_startDay]=[localSchedule]
+                                    else:
+                                        scheduleArray[local_startDay].append(localSchedule)
+                                #     print("scheduleArray ",scheduleArray[local_startDay])
+                                # print("**** scheduleArray", scheduleArray)
                 # print("scheduleArray", scheduleArray)
                 # print("sched ", i)
                 scheduleStr = json.dumps(scheduleArray)
@@ -1880,50 +1882,63 @@ class GetSchedule(Resource):
             user_timezone = timeZoneResult['result'][0]['time_zone']
             if user_timezone == '' :
                 user_timezone = 'America/Los_Angeles'
-            # print("user_timezone",user_timezone)
+            # print("In GetSchedule : user_timezone",user_timezone)
             weekDatesResult = weekDates()
-            # print("weekDates",weekDatesResult)
+            # print("In GetSchedule : weekDates",weekDatesResult)
 
             for i in items["result"]:
                 utc_schedule = json.loads(i["schedule"])
                 scheduleArray = {}
-                # print("utc schedule ", utc_schedule)
+                # print("In GetSchedule : utc schedule ", utc_schedule)
                 for day in utc_schedule:
-                    print(day)
+                    # print(day)
                     if day not in scheduleArray:
                         scheduleArray[day] = []
                     if len(utc_schedule[day]) != 0:
-                        corresponding_date = weekDatesResult[day]
-                        dateTimeStringStart = corresponding_date + " " + utc_schedule[day][0]['start_time'] + ":00 " + day
-                        local_startDateTime = convertToLocalTZ(user_timezone, dateTimeStringStart)
-                        local_startTime = local_startDateTime.strftime("%H:%M")
-                        local_startDay = local_startDateTime.strftime("%A")
-                        print("local_startDateTime ", local_startDateTime)
-                        print("local_startTime ", local_startTime)
-                        print("local_startDay ", local_startDay)
+                        for idx, element in enumerate(utc_schedule[day]):
+                            if utc_schedule[day][idx]['start_time'] != '' and utc_schedule[day][idx]['end_time'] != '':
+                                corresponding_date = weekDatesResult[day]
+                                dateTimeStringStart = corresponding_date + " " + utc_schedule[day][idx]['start_time'] + ":00 " + day
+                                local_startDateTime = convertToLocalTZ(user_timezone, dateTimeStringStart)
+                                local_startTime = local_startDateTime.strftime("%H:%M")
+                                local_startDay = local_startDateTime.strftime("%A")
+                                # print("In GetSchedule : local_startDateTime ", local_startDateTime)
+                                # print("In GetSchedule : local_startTime ", local_startTime)
+                                # print("In GetSchedule : local_startDay ", local_startDay)
 
-                        dateTimeStringEnd = corresponding_date + " " + utc_schedule[day][0]['end_time'] + ":00 " + day
-                        local_endDateTime = convertToLocalTZ(user_timezone,dateTimeStringEnd)
-                        local_endTime = local_endDateTime.strftime("%H:%M")
-                        local_endDay = local_endDateTime.strftime("%A")
-                        print("local_endDateTime ", local_endDateTime)
-                        print("local_endTime ", local_endTime)
-                        print("local_endDay ", local_endDay)
-                        print(" check ", local_startDateTime.date() == local_endDateTime.date())
+                                dateTimeStringEnd = corresponding_date + " " + utc_schedule[day][idx]['end_time'] + ":00 " + day
+                                local_endDateTime = convertToLocalTZ(user_timezone,dateTimeStringEnd)
+                                local_endTime = local_endDateTime.strftime("%H:%M")
+                                local_endDay = local_endDateTime.strftime("%A")
+                                # print("In GetSchedule : local_endDateTime ", local_endDateTime)
+                                # print("In GetSchedule : local_endTime ", local_endTime)
+                                # print("In GetSchedule : local_endDay ", local_endDay)
+                                checkSameDate = local_startDateTime.date() == local_endDateTime.date()
 
-                        if local_startDateTime.date() != local_endDateTime.date():
-                            localSchedule = {'start_time' : local_startTime, 'end_time' : "23:59"}
-                            scheduleArray[local_startDay].append(localSchedule)
-                            localSchedule = {'start_time' : "00:00", 'end_time' : local_endTime}
-                            scheduleArray[local_endDay].append(localSchedule)
-                        else:
-                            localSchedule = {'start_time' : local_startTime, 'end_time' : local_endTime}
-                            scheduleArray[local_startDay].append(localSchedule)
-                print("scheduleArray", scheduleArray)
-                print("sched ", i)
+                                if checkSameDate == False:
+                                    localSchedule = {'start_time' : local_startTime, 'end_time' : "23:59"}
+                                    scheduleArray[local_startDay] = [localSchedule]
+                                    localSchedule = {'start_time' : "00:00", 'end_time' : local_endTime}
+                                    if local_endDay not in scheduleArray:
+                                        scheduleArray[local_endDay]=[localSchedule]
+                                    else:
+                                        scheduleArray[local_endDay].append(localSchedule)
+                                else:
+                                    # print("checkSameDate ",checkSameDate)
+                                    localSchedule = {'start_time' : local_startTime, 'end_time' : local_endTime}
+                                    # print("localSchedule ",localSchedule, " 88 ",local_startDay)
+                                    # print("scheduleArray = ",scheduleArray)
+                                    if local_startDay not in scheduleArray:
+                                        scheduleArray[local_startDay]=[localSchedule]
+                                    else:
+                                        scheduleArray[local_startDay].append(localSchedule)
+                                #     print("scheduleArray ",scheduleArray[local_startDay])
+                                # print("**** scheduleArray", scheduleArray)
+                print("In GetSchedule : scheduleArray", scheduleArray)
+                print("In GetSchedule : sched ", i)
                 scheduleStr = json.dumps(scheduleArray)
                 i.update({'schedule':scheduleStr})
-                print("sched2 scheduleAPI ", i)
+                print("In GetSchedule : sched2 ", i)
 
             sunday = []
             monday = []
@@ -1935,7 +1950,7 @@ class GetSchedule(Resource):
 
             for i in items["result"]:
                 schedule = json.loads(i["schedule"])
-                print("user_schedule ", schedule)
+                print("In GetSchedule : user_schedule ", schedule)
                 for s in schedule["Sunday"]:
                     print("s", s)
                     if s["start_time"] != "":
@@ -2023,7 +2038,7 @@ class GetSchedule(Resource):
                     "friday": friday,
                     "saturday": saturday,
                 }
-                print(item)
+                print("In GetSchedule : item ", item)
 
             response["message"] = "successful"
             response["result"] = item
