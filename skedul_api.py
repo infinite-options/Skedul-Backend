@@ -783,6 +783,47 @@ class UserDetails(Resource):
         finally:
             disconnect(conn)
 
+    # Create put command to update UserDetails       
+    def put(self):
+        print("In update User Details")
+        response = {}
+        conn = connect()
+        rowsAffected = 0
+
+        # Put Form data into a Dictionary
+        payload = request.form.to_dict()
+        print(payload)
+
+        # Verify that a UID is present if doing a PUT
+        uid = payload.get('user_unique_id')
+        print(uid)
+        if uid is None:
+            raise BadRequest("Request failed, no UID in payload.")
+        
+        # Iterate over the dictionary to extract the key value pairs
+        for key, value in payload.items():
+            print(f"Key: {key}, Value: {value}")
+            if key != 'user_unique_id':
+
+                query = f"""
+                        UPDATE skedul.users
+                        SET {key} = \'{value}\'
+                        WHERE user_unique_id = \'{uid}\'
+                    """
+
+                print("Query:", query)
+                
+                # Write each key value pair to the database
+                item = execute(query, "post", conn)
+                print("result: ", item)
+                print("message: ", item['message'])
+                print("code: ", item['code'], type(item['code']))
+                
+                if item['code'] == 281:
+                    rowsAffected = rowsAffected + 1
+                print(rowsAffected)
+        response = (rowsAffected)
+        return response
 
 # updating access token if expired
 class UpdateAccessToken(Resource):
@@ -2755,7 +2796,7 @@ api.add_resource(UserSocialSignUp, "/api/v2/UserSocialSignUp")
 api.add_resource(UpdateAccessToken,
                  "/api/v2/UpdateAccessToken/<string:user_unique_id>")
 api.add_resource(UserToken, "/api/v2/UserToken/<string:user_email_id>")
-api.add_resource(UserDetails, "/api/v2/UserDetails/<string:user_id>")
+api.add_resource(UserDetails, "/api/v2/UserDetails/<string:user_id>", "/api/v2/UserDetails")
 
 api.add_resource(Login, "/api/v2/Login")
 api.add_resource(
