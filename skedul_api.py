@@ -13,6 +13,13 @@
 # pip3 install python-dateutil
 
 import os
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 import uuid
 import boto3
 import json
@@ -1194,6 +1201,65 @@ class UserSocialLogin(Resource):
 
             return response, 200
         except:
+            raise BadRequest("Request failed, please try again later.")
+        finally:
+            disconnect(conn)
+
+
+# Every Circle single sign-on: Every Circle signs a short-lived token with the
+# shared SKEDUL_SSO_SECRET; we verify it and log the user in by email.
+class EveryCircleLogin(Resource):
+    def post(self):
+        print("In EveryCircleLogin")
+        import jwt
+
+        secret = os.environ.get("SKEDUL_SSO_SECRET")
+        if not secret:
+            return {"result": False, "message": "SKEDUL_SSO_SECRET not configured"}, 500
+
+        data = request.get_json(force=True, silent=True) or {}
+        token = data.get("token")
+        if not token:
+            return {"result": False, "message": "Missing token"}, 400
+
+        try:
+            claims = jwt.decode(
+                token,
+                secret,
+                algorithms=["HS256"],
+                audience="skedul",
+                issuer="everycircle",
+            )
+        except jwt.ExpiredSignatureError:
+            return {"result": False, "message": "Link expired, please try again from Every Circle"}, 401
+        except jwt.InvalidTokenError:
+            return {"result": False, "message": "Invalid token"}, 401
+
+        email = (claims.get("email") or "").strip().lower()
+        if not email:
+            return {"result": False, "message": "Invalid token"}, 401
+
+        conn = connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT user_unique_id, user_email_id, google_auth_token
+                       FROM users WHERE LOWER(user_email_id) = %s LIMIT 1;""",
+                    (email,),
+                )
+                user = cur.fetchone()
+            if not user:
+                return {"result": False, "email": email, "message": "Email ID doesnt exist"}, 200
+            return {
+                "result": {
+                    "user_unique_id": user["user_unique_id"],
+                    "user_email_id": user["user_email_id"],
+                    "google_auth_token": user["google_auth_token"],
+                },
+                "message": "Correct Email",
+            }, 200
+        except Exception as e:
+            print("EveryCircleLogin error:", e)
             raise BadRequest("Request failed, please try again later.")
         finally:
             disconnect(conn)
@@ -2816,6 +2882,7 @@ api.add_resource(
     UserLogin, "/api/v2/UserLogin/<string:email_id>,<string:password>")
 api.add_resource(UserSocialLogin, "/api/v2/UserSocialLogin/<string:email_id>")
 api.add_resource(GetEmailId, "/api/v2/GetEmailId/<string:email_id>")
+api.add_resource(EveryCircleLogin, "/api/v2/EveryCircleLogin")
 
 # view endpoints
 api.add_resource(AddView, "/api/v2/AddView")
