@@ -36,3 +36,7 @@ sample.py
 __pycache__/
 test.py
 requirement.txt
+
+# local virtualenv and secrets
+.venv/
+.env

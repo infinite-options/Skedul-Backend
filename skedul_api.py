@@ -832,31 +832,42 @@ class UpdateAccessToken(Resource):
         response = {}
         items = {}
 
+        conn = None
         try:
             conn = connect()
             data = request.get_json(force=True)
-            google_auth_token = data["google_auth_token"]
+            google_auth_token = data.get("google_auth_token")
+            if not google_auth_token:
+                raise BadRequest("google_auth_token is required.")
 
-            execute(
-                """UPDATE users
-                       SET google_auth_token = \'"""
-                + google_auth_token
-                + """\'
-                       WHERE user_unique_id = \'"""
-                + user_unique_id
-                + """\';
-                        """,
-                "post",
-                conn,
-            )
+            # google_refresh_token / access_expires_in are optional: token
+            # refreshes only send the access token, while "Reconnect Google
+            # Calendar" (Integration page) also sends a new refresh token.
+            fields = {"google_auth_token": google_auth_token}
+            if data.get("google_refresh_token"):
+                fields["google_refresh_token"] = data["google_refresh_token"]
+            if data.get("access_expires_in"):
+                fields["access_expires_in"] = str(data["access_expires_in"])
+
+            # Column names come from the fixed keys above; values are parameterized.
+            set_clause = ", ".join(column + " = %s" for column in fields)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE users SET " + set_clause + " WHERE user_unique_id = %s",
+                    list(fields.values()) + [user_unique_id],
+                )
+            conn.commit()
 
             response["message"] = "successful"
 
             return response, 200
+        except BadRequest:
+            raise
         except:
             raise BadRequest("Request failed, please try again later.")
         finally:
-            disconnect(conn)
+            if conn:
+                disconnect(conn)
 
 
 # CHECK THAT THIS IS ONLY USED FOR MOBILE LOGIN
