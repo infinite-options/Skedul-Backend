@@ -1265,6 +1265,238 @@ class EveryCircleLogin(Resource):
             disconnect(conn)
 
 
+# -- GOOGLE API ------
+GOOGLE_API = "https://www.googleapis.com"
+
+
+def _load_event(conn, event_id):
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT event_unique_id, user_id, view_id, event_name, location, duration
+               FROM skedul.event_types WHERE event_unique_id = %s LIMIT 1""",
+            (event_id,),
+        )
+        return cur.fetchone()
+
+
+def _owner_google_token(conn, user_id):
+    """Owner's Google access token, refreshed with the stored refresh token if expired."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """SELECT google_auth_token, google_refresh_token
+               FROM skedul.users WHERE user_unique_id = %s LIMIT 1""",
+            (user_id,),
+        )
+        user = cur.fetchone()
+    if not user:
+        return None
+    token = user.get("google_auth_token")
+    if token:
+        check = requests.get(f"{GOOGLE_API}/oauth2/v1/tokeninfo", params={"access_token": token}, timeout=10)
+        if check.ok:
+            return token
+    refresh = requests.post(
+        "https://oauth2.googleapis.com/token",
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": user.get("google_refresh_token") or "",
+            "client_id": os.environ.get("GOOGLE_CLIENT_ID", ""),
+            "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET", ""),
+        },
+        timeout=10,
+    )
+    token = refresh.json().get("access_token") if refresh.ok else None
+    if not token:
+        print("Owner Google token refresh failed:", refresh.status_code, refresh.text[:200])
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE skedul.users SET google_auth_token = %s WHERE user_unique_id = %s",
+            (token, user_id),
+        )
+    conn.commit()
+    return token
+
+
+def _verify_booking_token(token, event_id):
+    """Claims of a valid Every Circle booking token for this event, else None."""
+    import jwt
+
+    secret = os.environ.get("SKEDUL_SSO_SECRET")
+    if not secret or not token:
+        return None
+    try:
+        claims = jwt.decode(
+            token, secret, algorithms=["HS256"], audience="skedul-booking", issuer="everycircle"
+        )
+    except jwt.InvalidTokenError:
+        return None
+    if str(claims.get("event_id")) != str(event_id) or not claims.get("purchase_id"):
+        return None
+    return claims
+
+
+def _bookings_used(conn, purchase_id):
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM skedul.meetings WHERE ec_purchase_id = %s",
+            (purchase_id,),
+        )
+        return int(cur.fetchone()["n"])
+
+
+def _booking_status(conn, claims):
+    allowed = int(claims.get("allowed") or 0)
+    used = _bookings_used(conn, claims["purchase_id"])
+    return {"allowed": allowed, "used": used, "remaining": max(allowed - used, 0)}
+
+
+class EventOwner(Resource):
+    """Owner name/email for the public booking page (no tokens)."""
+
+    def get(self, event_id):
+        conn = connect()
+        try:
+            event = _load_event(conn, event_id)
+            if not event:
+                return {"message": "Event not found"}, 404
+            with conn.cursor() as cur:
+                cur.execute(
+                    """SELECT user_unique_id, user_email_id, user_first_name, user_last_name
+                       FROM skedul.users WHERE user_unique_id = %s LIMIT 1""",
+                    (event["user_id"],),
+                )
+                owner = cur.fetchone()
+            return {"result": owner}, 200
+        finally:
+            disconnect(conn)
+
+
+class EventFreeBusy(Resource):
+    """Busy times on the event owner's primary calendar between time_min and time_max."""
+
+    def post(self):
+        data = request.get_json(force=True, silent=True) or {}
+        conn = connect()
+        try:
+            event = _load_event(conn, data.get("event_id"))
+            if not event:
+                return {"message": "Event not found"}, 404
+            token = _owner_google_token(conn, event["user_id"])
+            if not token:
+                return {"message": "Owner calendar unavailable"}, 502
+            resp = requests.post(
+                f"{GOOGLE_API}/calendar/v3/freeBusy",
+                json={
+                    "timeMin": data.get("time_min"),
+                    "timeMax": data.get("time_max"),
+                    "items": [{"id": "primary"}],
+                },
+                headers={"Authorization": "Bearer " + token},
+                timeout=15,
+            )
+            if not resp.ok:
+                print("Owner freeBusy failed:", resp.status_code, resp.text[:200])
+                return {"message": "Owner calendar unavailable"}, 502
+            busy = resp.json().get("calendars", {}).get("primary", {}).get("busy", [])
+            return {"busy": busy}, 200
+        finally:
+            disconnect(conn)
+
+
+class BookingStatus(Resource):
+    """Bookings allowed/used/remaining for an Every Circle booking token."""
+
+    def post(self):
+        data = request.get_json(force=True, silent=True) or {}
+        conn = connect()
+        try:
+            claims = _verify_booking_token(data.get("booking_token"), data.get("event_id"))
+            if not claims:
+                return {"message": "Invalid or expired booking link"}, 401
+            return {"result": _booking_status(conn, claims)}, 200
+        finally:
+            disconnect(conn)
+
+
+class BookEvent(Resource):
+    """Book a meeting on an event: create the owner's Google Calendar event and save it.
+
+    With an Every Circle booking_token, refuses once the purchase's bookings are used up.
+    """
+
+    def post(self):
+        data = request.get_json(force=True, silent=True) or {}
+        conn = connect()
+        try:
+            event = _load_event(conn, data.get("event_id"))
+            if not event:
+                return {"message": "Event not found"}, 404
+
+            claims = None
+            if data.get("booking_token"):
+                claims = _verify_booking_token(data["booking_token"], event["event_unique_id"])
+                if not claims:
+                    return {"message": "Invalid or expired booking link"}, 401
+                if _booking_status(conn, claims)["remaining"] <= 0:
+                    return {"message": "All bookings for this purchase have been used"}, 409
+
+            token = _owner_google_token(conn, event["user_id"])
+            if not token:
+                return {"message": "Owner calendar unavailable"}, 502
+
+            attendees = [
+                {"email": a["email"]}
+                for a in (data.get("attendees") or [])
+                if isinstance(a, dict) and a.get("email")
+            ]
+            gcal = requests.post(
+                f"{GOOGLE_API}/calendar/v3/calendars/primary/events",
+                params={"sendUpdates": "all"},
+                json={
+                    "summary": data.get("summary") or event["event_name"],
+                    "location": data.get("location") or event.get("location") or "",
+                    "start": {"dateTime": data.get("start")},
+                    "end": {"dateTime": data.get("end")},
+                    "attendees": attendees,
+                },
+                headers={"Authorization": "Bearer " + token},
+                timeout=15,
+            )
+            if not gcal.ok:
+                print("Google Calendar insert failed:", gcal.status_code, gcal.text[:300])
+                return {"message": "Could not create the calendar event"}, 502
+
+            new_id = execute("CALL skedul.get_meeting_id;", "get", conn)["result"][0]["new_id"]
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO skedul.meetings
+                       SET meeting_unique_id = %s, user_id = %s, view_id = %s, event_id = %s,
+                           meeting_name = %s, location = %s, guest_email = %s,
+                           meetDate = %s, meetTime = %s, ec_purchase_id = %s""",
+                    (
+                        new_id,
+                        event["user_id"],
+                        event["view_id"],
+                        event["event_unique_id"],
+                        data.get("summary") or event["event_name"],
+                        data.get("location") or "",
+                        json.dumps(attendees),
+                        data.get("meeting_date"),
+                        data.get("meeting_time"),
+                        claims["purchase_id"] if claims else None,
+                    ),
+                )
+            conn.commit()
+
+            result = {"meeting_unique_id": new_id}
+            if claims:
+                result.update(_booking_status(conn, claims))
+            return {"message": "Meeting booked", "result": result}, 200
+        finally:
+            disconnect(conn)
+
+
 class GetEmailId(Resource):
     def get(self, email_id):
         print("In GetEmailID")
@@ -2883,6 +3115,10 @@ api.add_resource(
 api.add_resource(UserSocialLogin, "/api/v2/UserSocialLogin/<string:email_id>")
 api.add_resource(GetEmailId, "/api/v2/GetEmailId/<string:email_id>")
 api.add_resource(EveryCircleLogin, "/api/v2/EveryCircleLogin")
+api.add_resource(EventOwner, "/api/v2/EventOwner/<string:event_id>")
+api.add_resource(EventFreeBusy, "/api/v2/EventFreeBusy")
+api.add_resource(BookingStatus, "/api/v2/BookingStatus")
+api.add_resource(BookEvent, "/api/v2/BookEvent")
 
 # view endpoints
 api.add_resource(AddView, "/api/v2/AddView")
